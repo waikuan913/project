@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>檢測項目管理</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDGgLC9tw0zjz0v6HsGmg7n-r0WM62UhTs",
+        authDomain: "system-test-4cb83.firebaseapp.com",
+        projectId: "system-test-4cb83",
+        storageBucket: "system-test-4cb83.firebasestorage.app",
+        messagingSenderId: "212237023118",
+        appId: "1:212237023118:web:28ba9d1535fe13aa9816df"
+    };
+    firebase.initializeApp(firebaseConfig);
+    </script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary-gradient: linear-gradient(135deg, #7c8ef0, #8b5db8); --bg: #f5f7fa; --btn-purple: #7c79d9; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft JhengHei', Arial, sans-serif; background: var(--bg); padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        /* ===== 標頭（與問題管理一致）===== */
+        .header { background: var(--primary-gradient); color: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; position: relative; }
+        .header h1 { font-size: 24px; margin-bottom: 15px; }
+        .header-switch-btn {
+            background: rgba(255,255,255,0.2); color: white;
+            padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: bold;
+            text-decoration: none; display: flex; align-items: center; gap: 6px;
+            transition: all 0.25s; border: 1px solid rgba(255,255,255,0.3); cursor: pointer;
+        }
+        .header-switch-btn:hover { background: white; color: #7c8ef0; border-color: white; }
+        .header-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; }
+        .header-item { background: rgba(255,255,255,0.2); padding: 10px; border-radius: 8px; }
+        .header-item label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 5px; }
+        .header-item input { width: 100%; border: none; padding: 6px; border-radius: 4px; font-size: 14px; outline: none; }
+
+        /* ===== 統計卡片（與問題管理一致）===== */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: default; border-left: 5px solid #ddd; transition: all 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .stat-card.active { border: 2px solid var(--btn-purple); background: #f0f4ff; }
+        .stat-number { font-size: 22px; font-weight: bold; display: block; }
+        .stat-label { font-size: 12px; color: #64748b; margin-top: 3px; }
+
+        /* ===== 控制列（與問題管理一致）===== */
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; transition: all 0.2s; }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .btn-primary { background: var(--btn-purple); color: white; }
+        .btn-secondary { background: white; border: 1px solid #ddd; color: #444; }
+        .btn-secondary:hover { border-color: var(--btn-purple); color: var(--btn-purple); }
+
+        /* ===== 左側導覽 + 右側表格 ===== */
+        .layout { display: flex; gap: 20px; }
+        .sidebar { width: 240px; min-width: 240px; background: white; border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); max-height: 600px; overflow-y: auto; }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .sidebar-title { font-size: 15px; font-weight: bold; color: #1e293b; margin-bottom: 12px; }
+        
+        .attr-group { margin-bottom: 8px; }
+        .attr-header { padding: 9px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; color: #0f172a; display: flex; align-items: center; gap: 6px; transition: all 0.2s; user-select: none; }
+        .attr-header:hover { background: #f1f5f9; }
+        .attr-header.active { background: #ede9fe; color: #7c3aed; }
+        .attr-arrow { font-size: 10px; color: #94a3b8; transition: transform 0.2s; }
+        .attr-arrow.open { transform: rotate(90deg); }
+        
+        .cat-list { display: none; padding-left: 12px; margin-top: 4px; }
+        .cat-list.open { display: block; }
+        .cat-item { padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; font-size: 14px; color: #1e293b; font-weight: 500; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .cat-item:hover { background: #f1f5f9; }
+        .cat-item.active { background: #ede9fe; color: #7c3aed; font-weight: bold; }
+        .cat-badge { font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #e2e8f0; color: #64748b; }
+        .cat-badge.cb-fail { background: #fee2e2; color: #dc2626; }
+        .cat-badge.cb-pass { background: #d1fae5; color: #065f46; }
+
+        /* 右側 */
+        .main-area { flex: 1; min-width: 0; }
+        .table-card { background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+        .table-header { background: #f8fafc; padding: 12px 18px; border-bottom: 2px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+        .table-title { font-size: 16px; font-weight: bold; color: #1e293b; }
+        .table-stats { font-size: 13px; color: #64748b; }
+
+        .table-wrap { max-height: 580px; overflow: auto; }
+        .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+        .table-wrap::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 15px; }
+        thead tr { background: #1e3a5f; color: white; position: sticky; top: 0; z-index: 10; }
+        thead th { padding: 11px 12px; text-align: center; font-size: 13px; font-weight: bold; white-space: nowrap; border-right: 1px solid #2d5282; }
+        thead th.th-item { text-align: left; }
+        .col-hint { font-size: 10px; opacity: 0.6; font-weight: normal; display: block; }
+
+        tbody tr { border-bottom: 1px solid #e2e8f0; transition: background 0.12s; }
+        tbody tr:nth-child(even) { background: #fafafa; }
+        tbody tr:hover { background: #f0f4ff !important; }
+        tbody tr.row-pass { background: #f0fdf4 !important; }
+        tbody tr.row-pass:nth-child(even) { background: #ecfdf5 !important; }
+        tbody tr.row-fail { background: #fff5f5 !important; }
+        tbody tr.row-fail:nth-child(even) { background: #fef2f2 !important; }
+        tbody tr.row-na { background: #f9fafb !important; }
+        tbody td { padding: 12px 12px; border-right: 1px solid #e2e8f0; vertical-align: middle; }
+
+        .td-no { text-align: center; color: #94a3b8; font-size: 12px; font-weight: bold; }
+        .td-item { font-size: 15px; color: #0f172a; line-height: 1.6; font-weight: 500; }
+        .row-na .td-item { color: #9ca3af; }
+        
+        .issue-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; color: #7c3aed; cursor: pointer; text-decoration: none; }
+        .issue-link:hover { text-decoration: underline; }
+
+        .td-risk { text-align: center; }
+        .risk-badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white; white-space: nowrap; }
+        .r-urgent { background: #b91c1c; }
+        .r-high   { background: #f97316; }
+        .r-normal { background: #eab308; color: #1e293b; }
+        .r-suggestion { background: #22c55e; }
+
+        .td-action { text-align: center; }
+        .act-circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #e2e8f0; background: white; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; font-weight: bold; color: #94a3b8; }
+        .act-circle:hover { transform: scale(1.2); border-color: #94a3b8; color: #475569; }
+        .act-circle.ap { background: #10b981; border-color: #10b981; color: white; }
+        .act-circle.af { background: #ef4444; border-color: #ef4444; color: white; }
+        .act-circle.an { background: #9ca3af; border-color: #9ca3af; color: white; }
+
+        .td-who { text-align: center; }
+        .who-input { width: 90px; border: none; background: transparent; text-align: center; font-size: 12px; color: #475569; border-bottom: 1px dashed transparent; padding: 2px 3px; }
+        .who-input:hover { border-bottom-color: #cbd5e1; }
+        .who-input:focus { outline: none; border-bottom-color: #7c79d9; background: #f0f4ff; border-radius: 4px; border-bottom: 1px solid #7c79d9; }
+        .row-na .who-input { color: #9ca3af; }
+
+        .td-date { text-align: center; font-size: 12px; color: #64748b; }
+        .row-na .td-date { color: #9ca3af; }
+
+        .empty-state { padding: 60px 20px; text-align: center; color: #94a3b8; font-size: 15px; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 28px; right: 28px; background: #1e293b; color: white; padding: 14px 18px; border-radius: 10px; font-size: 13px; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); transform: translateY(20px); opacity: 0; transition: all 0.35s; z-index: 9999; pointer-events: none; max-width: 360px; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast-link { color: #a78bfa; font-weight: bold; }
+
+        /* 新專案提示 Modal */
+        .welcome-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; }
+        .welcome-overlay.show { display:flex; }
+        .welcome-box { background:white; border-radius:16px; padding:36px 40px; max-width:520px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3); text-align:center; }
+        .welcome-box h2 { font-size:22px; color:#1e293b; margin-bottom:12px; }
+        .welcome-box p { color:#64748b; font-size:14px; line-height:1.7; margin-bottom:8px; }
+        .welcome-box .warn { color:#dc2626; font-size:13px; font-weight:bold; margin-bottom:24px; }
+        .welcome-actions { display:flex; flex-direction:column; gap:12px; }
+        .welcome-btn { padding:12px 20px; border:none; border-radius:8px; font-size:14px; font-weight:bold; cursor:pointer; }
+        .welcome-btn-primary { background:#7c3aed; color:white; }
+        .welcome-btn-secondary { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+        .welcome-btn-download { background:#0ea5e9; color:white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ===== 標頭 ===== -->
+    <div class="header">
+        <h1>✅ 檢測項目管理</h1>
+        <div id="currentProjectDisplay" style="font-size:13px; margin-top:8px; opacity:0.9;">
+            📁 載入中...
+        </div>
+        <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; align-items: center;">
+            <a href="專案管理.html" class="header-switch-btn">
+                📁 專案管理
+            </a>
+            <a href="檢測問題管理.html" class="header-switch-btn">
+                📋 問題管理
+            </a>
+        </div>
+        <div class="header-info">
+            <div class="header-item"><label>客戶名稱</label><input type="text" id="clientName" readonly style="background:#f8fafc; cursor:not-allowed;"></div>
+            <div class="header-item"><label>專案名稱</label><input type="text" id="projectName" readonly style="background:#f8fafc; cursor:not-allowed;"></div>
+            <div class="header-item"><label>PM</label><input type="text" id="pmName" readonly style="background:#f8fafc; cursor:not-allowed;"></div>
+            <div class="header-item"><label>工程師</label><input type="text" id="engineers" readonly style="background:#f8fafc; cursor:not-allowed;"></div>
+            <div class="header-item"><label>專案起迄時間</label><input type="text" id="dateRange" readonly style="background:#f8fafc; cursor:not-allowed;"></div>
+        </div>
+    </div>
+
+    <!-- ===== 統計卡片 ===== -->
+    <div class="stats">
+        <div class="stat-card active" style="border-left-color: #3b82f6;" data-filter="all">
+            <span class="stat-number" id="totalItems">198</span>
+            <div class="stat-label">📋 總檢測項目</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #10b981;" data-filter="passed">
+            <span class="stat-number" id="passedItems">0</span>
+            <div class="stat-label">✅ 測試通過</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #ef4444; cursor: pointer;" data-filter="failed">
+            <span class="stat-number" id="failedItems">0</span>
+            <div class="stat-label">❌ 測試不通過</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #6b7280; cursor: pointer;" data-filter="na">
+            <span class="stat-number" id="naItems">0</span>
+            <div class="stat-label">🚫 不適用</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #f59e0b;" data-filter="untested">
+            <span class="stat-number" id="untestedItems">198</span>
+            <div class="stat-label">⏳ 尚未測試</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #8b5cf6; cursor: default;" data-filter="completion">
+            <span class="stat-number" id="completionRate">0%</span>
+            <div class="stat-label">📊 完成率</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #0ea5e9; cursor: default;" data-filter="passrate">
+            <span class="stat-number" id="passRate">0%</span>
+            <div class="stat-label">📈 通過率</div>
+        </div>
+    </div>
+
+    <!-- ===== 控制列 ===== -->
+    <div class="controls">
+        <button class="btn btn-primary" onclick="openReport()">📄 檢測報告 PDF</button>
+        <button class="btn btn-primary" onclick="exportFullReportExcel()">📊 檢測報告 Excel</button>
+        <button class="btn btn-secondary" onclick="exportResultsCSV()">📊 匯出測驗結果 CSV</button>
+        <button class="btn btn-secondary" onclick="exportChecklistCSV()">📋 匯出檢測清單 CSV</button>
+        <button class="btn btn-secondary" onclick="importChecklistCSV()">📥 匯入檢測清單 CSV</button>
+        <button class="btn btn-secondary" onclick="exportData()">💾 匯出檢測記錄 JSON</button>
+        <button class="btn btn-secondary" onclick="importData()">📥 匯入檢測記錄 JSON</button>
+        <button class="btn btn-secondary" onclick="resetAll()">🔄 重置所有狀態</button>
+    </div>
+
+    <!-- ===== 左側導覽 + 右側表格 ===== -->
+    <div class="layout">
+        
+        <!-- 左側 -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-title">📂 檢測類別</div>
+            <!-- 動態生成 -->
+        </div>
+
+        <!-- 右側 -->
+        <div class="main-area">
+            <div class="table-card">
+                <div class="table-header">
+                    <div class="table-title" id="tableTitle">← 請從左側選擇檢測類別</div>
+                    <div class="table-stats" id="tableStats"></div>
+                </div>
+                
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:50px;">序號</th>
+                                <th class="th-item">檢測項目</th>
+                                <th style="width:90px;">處理順序</th>
+                                <th style="width:60px;">✓<span class="col-hint">通過</span></th>
+                                <th style="width:60px;">✗<span class="col-hint">不通過</span></th>
+                                <th style="width:60px;">—<span class="col-hint">不適用</span></th>
+                                <th style="width:100px;">測試人員</th>
+                                <th style="width:100px;">測試日期</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="8" class="empty-state">← 請從左側選擇檢測類別</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- 新專案提示 Modal -->
+<div class="welcome-overlay" id="welcomeOverlay">
+    <div class="welcome-box">
+        <h2>📋 歡迎開始新專案檢測</h2>
+        <p>系統內建標準檢測清單，可直接開始使用。</p>
+        <p>若此專案需要自訂檢測項目，請先下載範本，填寫完成後再上傳。</p>
+        <p class="warn">⚠️ 自訂清單上傳後將取代內建清單，且一旦開始檢測即無法再更換。</p>
+        <div class="welcome-actions">
+            <button class="welcome-btn welcome-btn-primary" onclick="closeWelcome()">✅ 使用內建檢測清單，開始作業</button>
+            <button class="welcome-btn welcome-btn-download" onclick="welcomeDownload()">📥 下載檢測清單範本 CSV</button>
+            <button class="welcome-btn welcome-btn-secondary" onclick="document.getElementById('checklistFileIn').click()">📤 上傳自訂檢測清單 CSV</button>
+        </div>
+        <div id="welcomeDownloadHint" style="display:none; margin-top:16px; padding:12px; background:#fef9c3; border-radius:8px; font-size:13px; color:#854d0e; line-height:1.6;">
+            📝 檔案已下載，請編輯完成後再回來上傳自訂清單。<br>
+            完成後請關閉此頁，返回專案管理重新進入即可。
+            <div style="margin-top:12px;">
+                <button class="welcome-btn welcome-btn-secondary" onclick="location.href='專案管理.html'" style="width:100%;">🔙 關閉並返回專案管理</button>
+            </div>
+        </div>
+        <input type="file" id="checklistFileIn" hidden accept=".csv" onchange="importChecklistCSVFromWelcome(this)">
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+    <span style="font-size:20px;">📋</span>
+    <div>
+        <div style="font-weight:bold;margin-bottom:2px;">問題已自動建立！</div>
+        <div style="font-size:12px;color:#94a3b8;"><span class="toast-link" id="toastMsg"></span> 已新增至問題管理</div>
+    </div>
+</div>
+
+<script>
+const CHECKLIST_ITEMS_DEFAULT = [
+{id:'CHK001',attr:'後台管理',cat:'身份驗證與權限管理',item:'登入功能正常(帳號密碼驗證)',risk:'urgent'},
+{id:'CHK002',attr:'後台管理',cat:'身份驗證與權限管理',item:'密碼強度檢查機制有效',risk:'high'},
+{id:'CHK003',attr:'後台管理',cat:'身份驗證與權限管理',item:'登入失敗次數限制功能運作',risk:'high'},
+{id:'CHK004',attr:'後台管理',cat:'身份驗證與權限管理',item:'忘記密碼流程可正常執行',risk:'high'},
+{id:'CHK005',attr:'後台管理',cat:'身份驗證與權限管理',item:'強制登出功能正常(閒置逾時)',risk:'high'},
+{id:'CHK006',attr:'後台管理',cat:'身份驗證與權限管理',item:'不同角色權限正確區隔(管理員/編輯者/審核者/瀏覽者)',risk:'urgent'},
+{id:'CHK007',attr:'後台管理',cat:'身份驗證與權限管理',item:'未授權使用者無法存取受限功能',risk:'urgent'},
+{id:'CHK008',attr:'後台管理',cat:'身份驗證與權限管理',item:'權限變更後立即生效',risk:'high'},
+{id:'CHK009',attr:'後台管理',cat:'身份驗證與權限管理',item:'多人同時登入不互相干擾',risk:'high'},
+{id:'CHK010',attr:'後台管理',cat:'身份驗證與權限管理',item:'同一帳號多機登入作阻檔',risk:'high'},
+{id:'CHK011',attr:'後台管理',cat:'身份驗證與權限管理',item:'Session管理正確(登出後無法使用back鍵返回)',risk:'high'},
+{id:'CHK012',attr:'後台管理',cat:'身份驗證與權限管理',item:'其他',risk:'high'},
+{id:'CHK013',attr:'後台管理',cat:'系統設定與管理',item:'使用者管理-新增使用者功能正常',risk:'high'},
+{id:'CHK014',attr:'後台管理',cat:'系統設定與管理',item:'使用者管理-編輯使用者資料功能正常',risk:'high'},
+{id:'CHK015',attr:'後台管理',cat:'系統設定與管理',item:'使用者管理-停用/啟用帳號功能正常',risk:'high'},
+{id:'CHK016',attr:'後台管理',cat:'系統設定與管理',item:'使用者管理-密碼重設功能正常',risk:'high'},
+{id:'CHK017',attr:'後台管理',cat:'系統設定與管理',item:'使用者管理-使用者列表查詢/篩選正常',risk:'high'},
+{id:'CHK018',attr:'後台管理',cat:'系統設定與管理',item:'系統參數設定-網站基本資料設定',risk:'high'},
+{id:'CHK019',attr:'後台管理',cat:'系統設定與管理',item:'系統參數設定-分類/標籤管理功能',risk:'high'},
+{id:'CHK020',attr:'後台管理',cat:'系統設定與管理',item:'系統參數設定-欄位設定/客製化功能',risk:'high'},
+{id:'CHK021',attr:'後台管理',cat:'系統設定與管理',item:'系統參數設定-郵件通知內容設定',risk:'high'},
+{id:'CHK022',attr:'後台管理',cat:'系統設定與管理',item:'系統參數設定-郵件發送設定',risk:'high'},
+{id:'CHK023',attr:'後台管理',cat:'系統設定與管理',item:'系統參數設定-相關文件內容設定(授權書、申請書等)',risk:'high'},
+{id:'CHK024',attr:'後台管理',cat:'系統設定與管理',item:'系統參數設定-相關文件頁面預覽',risk:'high'},
+{id:'CHK025',attr:'後台管理',cat:'系統設定與管理',item:'日誌與稽核-操作記錄正確記錄',risk:'high'},
+{id:'CHK026',attr:'後台管理',cat:'系統設定與管理',item:'日誌與稽核-登入記錄完整',risk:'high'},
+{id:'CHK027',attr:'後台管理',cat:'系統設定與管理',item:'日誌與稽核-日誌查詢功能正常',risk:'high'},
+{id:'CHK028',attr:'後台管理',cat:'系統設定與管理',item:'日誌與稽核-錯誤記錄機制',risk:'high'},
+{id:'CHK029',attr:'後台管理',cat:'系統設定與管理',item:'其他',risk:'high'},
+{id:'CHK030',attr:'後台管理',cat:'資料管理',item:'新增-必填欄位驗證正確',risk:'high'},
+{id:'CHK031',attr:'後台管理',cat:'資料管理',item:'新增-各類欄位格式驗證(日期、數字、email等)',risk:'high'},
+{id:'CHK032',attr:'後台管理',cat:'資料管理',item:'新增-能正確儲存中文、英文、特殊符號',risk:'high'},
+{id:'CHK033',attr:'後台管理',cat:'資料管理',item:'新增-長文字欄位可正常輸入與儲存',risk:'high'},
+{id:'CHK034',attr:'後台管理',cat:'資料管理',item:'新增-下拉選單、複選框功能正常',risk:'high'},
+{id:'CHK035',attr:'後台管理',cat:'資料管理',item:'新增-分類/標籤選擇與新增功能正常',risk:'high'},
+{id:'CHK036',attr:'後台管理',cat:'資料管理',item:'新增-儲存後產生正確的ID編號',risk:'urgent'},
+{id:'CHK037',attr:'後台管理',cat:'資料管理',item:'新增-重複編號檢查機制有效',risk:'urgent'},
+{id:'CHK038',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-列表頁面正確顯示資料',risk:'high'},
+{id:'CHK039',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-分頁功能正常運作',risk:'high'},
+{id:'CHK040',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-每頁顯示數量設定有效',risk:'normal'},
+{id:'CHK041',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-排序功能正常(升冪/降冪)',risk:'high'},
+{id:'CHK042',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-快速搜尋功能正常',risk:'high'},
+{id:'CHK043',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-進階搜尋各欄位組合查詢正確',risk:'high'},
+{id:'CHK044',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-篩選條件運作正常',risk:'high'},
+{id:'CHK045',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-詳細資料頁面完整顯示所有欄位',risk:'high'},
+{id:'CHK046',attr:'後台管理',cat:'資料管理',item:'讀取/查詢-關聯資料正確顯示(如相關典藏品)',risk:'high'},
+{id:'CHK047',attr:'後台管理',cat:'資料管理',item:'修改-編輯頁面正確載入既有資料',risk:'high'},
+{id:'CHK048',attr:'後台管理',cat:'資料管理',item:'修改-修改後儲存成功',risk:'urgent'},
+{id:'CHK049',attr:'後台管理',cat:'資料管理',item:'修改-修改記錄/版本控制功能正常',risk:'high'},
+{id:'CHK050',attr:'後台管理',cat:'資料管理',item:'修改-部分欄位修改不影響其他欄位',risk:'high'},
+{id:'CHK051',attr:'後台管理',cat:'資料管理',item:'修改-並行編輯衝突處理機制(如有)',risk:'high'},
+{id:'CHK052',attr:'後台管理',cat:'資料管理',item:'修改-批次修改功能正常',risk:'high'},
+{id:'CHK053',attr:'後台管理',cat:'資料管理',item:'修改-修改後資料同步到前台',risk:'urgent'},
+{id:'CHK054',attr:'後台管理',cat:'資料管理',item:'刪除(Delete)刪除前有確認提示',risk:'high'},
+{id:'CHK055',attr:'後台管理',cat:'資料管理',item:'刪除(Delete)刪除後資料確實移除',risk:'urgent'},
+{id:'CHK056',attr:'後台管理',cat:'資料管理',item:'刪除(Delete)關聯資料處理正確(級聯刪除或保留)',risk:'urgent'},
+{id:'CHK057',attr:'後台管理',cat:'資料管理',item:'刪除(Delete)批次刪除功能正常',risk:'high'},
+{id:'CHK058',attr:'後台管理',cat:'資料管理',item:'刪除(Delete)刪除權限控制正確',risk:'urgent'},
+{id:'CHK059',attr:'後台管理',cat:'資料管理',item:'其他',risk:'high'},
+{id:'CHK060',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-支援的檔案格式能正常上傳(jpg, png, pdf, mp4等)',risk:'urgent'},
+{id:'CHK061',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-檔案大小限制檢查有效',risk:'high'},
+{id:'CHK062',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-不支援格式會顯示錯誤訊息',risk:'high'},
+{id:'CHK063',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-批次上傳功能正常',risk:'high'},
+{id:'CHK064',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-上傳進度顯示正確',risk:'normal'},
+{id:'CHK065',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-上傳失敗有明確錯誤訊息',risk:'high'},
+{id:'CHK066',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-檔名特殊字元處理正確',risk:'high'},
+{id:'CHK067',attr:'後台管理',cat:'數位檔案管理',item:'檔案上傳-同名檔案處理機制(覆蓋/重新命名)',risk:'high'},
+{id:'CHK068',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-檔案預覽功能正常(圖片、PDF)',risk:'high'},
+{id:'CHK069',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-縮圖產生正確',risk:'high'},
+{id:'CHK070',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-檔案下載功能正常',risk:'high'},
+{id:'CHK071',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-檔案刪除功能正常',risk:'high'},
+{id:'CHK072',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-檔案替換功能正常',risk:'high'},
+{id:'CHK073',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-檔案與metadata關聯正確',risk:'urgent'},
+{id:'CHK074',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-多媒體檔案播放正常(音訊/視訊)',risk:'high'},
+{id:'CHK075',attr:'後台管理',cat:'數位檔案管理',item:'檔案管理-檔案儲存路徑正確',risk:'urgent'},
+{id:'CHK076',attr:'後台管理',cat:'數位檔案管理',item:'其他',risk:'high'},
+{id:'CHK077',attr:'後台管理',cat:'資料匯入/匯出',item:'匯入功能-CSV/Excel檔案匯入正常',risk:'high'},
+{id:'CHK078',attr:'後台管理',cat:'資料匯入/匯出',item:'匯入功能-欄位對應設定正確',risk:'high'},
+{id:'CHK079',attr:'後台管理',cat:'資料匯入/匯出',item:'匯入功能-資料驗證機制有效',risk:'high'},
+{id:'CHK080',attr:'後台管理',cat:'資料匯入/匯出',item:'匯入功能-匯入錯誤有詳細報告',risk:'high'},
+{id:'CHK081',attr:'後台管理',cat:'資料匯入/匯出',item:'匯入功能-匯入進度顯示',risk:'normal'},
+{id:'CHK082',attr:'後台管理',cat:'資料匯入/匯出',item:'匯入功能-大量資料匯入不會timeout',risk:'high'},
+{id:'CHK083',attr:'後台管理',cat:'資料匯入/匯出',item:'匯入功能-重複資料處理機制(更新/跳過/報錯)',risk:'high'},
+{id:'CHK084',attr:'後台管理',cat:'資料匯入/匯出',item:'匯出功能-匯出為CSV/Excel格式正常',risk:'high'},
+{id:'CHK085',attr:'後台管理',cat:'資料匯入/匯出',item:'匯出功能-匯出為XML/JSON格式正常',risk:'high'},
+{id:'CHK086',attr:'後台管理',cat:'資料匯入/匯出',item:'匯出功能-可選擇匯出欄位',risk:'high'},
+{id:'CHK087',attr:'後台管理',cat:'資料匯入/匯出',item:'匯出功能-匯出資料完整性',risk:'urgent'},
+{id:'CHK088',attr:'後台管理',cat:'資料匯入/匯出',item:'匯出功能-匯出檔案編碼正確(UTF-8)',risk:'high'},
+{id:'CHK089',attr:'後台管理',cat:'資料匯入/匯出',item:'匯出功能-大量資料匯出正常',risk:'high'},
+{id:'CHK090',attr:'後台管理',cat:'資料匯入/匯出',item:'其他',risk:'high'},
+{id:'CHK091',attr:'後台管理',cat:'報表與統計',item:'典藏品統計報表正確',risk:'high'},
+{id:'CHK092',attr:'後台管理',cat:'報表與統計',item:'使用者操作統計',risk:'normal'},
+{id:'CHK093',attr:'後台管理',cat:'報表與統計',item:'資料成長趨勢圖表',risk:'normal'},
+{id:'CHK094',attr:'後台管理',cat:'報表與統計',item:'報表匯出功能',risk:'high'},
+{id:'CHK095',attr:'後台管理',cat:'報表與統計',item:'自訂報表功能(如有)',risk:'normal'},
+{id:'CHK096',attr:'後台管理',cat:'報表與統計',item:'其他',risk:'high'},
+{id:'CHK097',attr:'前台展示',cat:'首頁與導覽',item:'首頁正常載入(版面)',risk:'urgent'},
+{id:'CHK098',attr:'前台展示',cat:'首頁與導覽',item:'單位相關資訊正確(名稱、地址等)',risk:'urgent'},
+{id:'CHK099',attr:'前台展示',cat:'首頁與導覽',item:'多圖片輪播功能',risk:'high'},
+{id:'CHK100',attr:'前台展示',cat:'首頁與導覽',item:'主選單導覽功能正常',risk:'high'},
+{id:'CHK101',attr:'前台展示',cat:'首頁與導覽',item:'主功能各頁面切換正常',risk:'high'},
+{id:'CHK102',attr:'前台展示',cat:'首頁與導覽',item:'麵包屑導航正確',risk:'normal'},
+{id:'CHK103',attr:'前台展示',cat:'首頁與導覽',item:'Logo連結回首頁',risk:'normal'},
+{id:'CHK104',attr:'前台展示',cat:'首頁與導覽',item:'搜尋框功能正常',risk:'high'},
+{id:'CHK105',attr:'前台展示',cat:'首頁與導覽',item:'語系切換功能(如有)',risk:'high'},
+{id:'CHK106',attr:'前台展示',cat:'首頁與導覽',item:'頁尾各項連結及訊息正確',risk:'high'},
+{id:'CHK107',attr:'前台展示',cat:'首頁與導覽',item:'資料內容顯示正常',risk:'high'},
+{id:'CHK108',attr:'前台展示',cat:'首頁與導覽',item:'圖檔顯示正常(大圖、縮圖等)',risk:'high'},
+{id:'CHK109',attr:'前台展示',cat:'首頁與導覽',item:'資料點擊正常',risk:'high'},
+{id:'CHK110',attr:'前台展示',cat:'首頁與導覽',item:'統計數字正確(瀏覽、點閱、下載等)',risk:'high'},
+{id:'CHK111',attr:'前台展示',cat:'首頁與導覽',item:'RWD響應式設計各裝置正常',risk:'high'},
+{id:'CHK112',attr:'前台展示',cat:'首頁與導覽',item:'熱門/最新典藏品展示',risk:'high'},
+{id:'CHK113',attr:'前台展示',cat:'首頁與導覽',item:'其他',risk:'high'},
+{id:'CHK114',attr:'前台展示',cat:'搜尋功能',item:'基本搜尋-關鍵字搜尋功能正常',risk:'high'},
+{id:'CHK115',attr:'前台展示',cat:'搜尋功能',item:'基本搜尋-搜尋結果數量正確',risk:'high'},
+{id:'CHK116',attr:'前台展示',cat:'搜尋功能',item:'基本搜尋-無結果時顯示適當訊息',risk:'normal'},
+{id:'CHK117',attr:'前台展示',cat:'搜尋功能',item:'基本搜尋-正確關鍵字能查到資料',risk:'high'},
+{id:'CHK118',attr:'前台展示',cat:'搜尋功能',item:'基本搜尋-模糊搜尋功能(如有)',risk:'high'},
+{id:'CHK119',attr:'前台展示',cat:'搜尋功能',item:'基本搜尋-常用詞提醒(如有)',risk:'normal'},
+{id:'CHK120',attr:'前台展示',cat:'搜尋功能',item:'進階搜尋-多欄位組合查詢正常',risk:'high'},
+{id:'CHK121',attr:'前台展示',cat:'搜尋功能',item:'進階搜尋-日期範圍查詢正確',risk:'high'},
+{id:'CHK122',attr:'前台展示',cat:'搜尋功能',item:'進階搜尋-邏輯運算子(AND/OR/NOT)正常',risk:'high'},
+{id:'CHK123',attr:'前台展示',cat:'搜尋功能',item:'進階搜尋-進階篩選器功能正常',risk:'high'},
+{id:'CHK124',attr:'前台展示',cat:'搜尋功能',item:'進階搜尋-常用詞提醒(如有)',risk:'normal'},
+{id:'CHK125',attr:'前台展示',cat:'搜尋功能',item:'搜尋結果頁-結果列表正常顯示',risk:'high'},
+{id:'CHK126',attr:'前台展示',cat:'搜尋功能',item:'搜尋結果頁-結果數量統計正確',risk:'high'},
+{id:'CHK127',attr:'前台展示',cat:'搜尋功能',item:'其他',risk:'high'},
+{id:'CHK128',attr:'前台展示',cat:'瀏覽功能',item:'瀏覽功能-依後分類瀏覽正常',risk:'high'},
+{id:'CHK129',attr:'前台展示',cat:'瀏覽功能',item:'瀏覽功能-排序選項有效(標題、時間、相關性)',risk:'high'},
+{id:'CHK130',attr:'前台展示',cat:'瀏覽功能',item:'瀏覽功能-排序功能正常(升冪/降冪)',risk:'high'},
+{id:'CHK131',attr:'前台展示',cat:'瀏覽功能',item:'瀏覽功能-每頁顯示數量設定有效',risk:'high'},
+{id:'CHK132',attr:'前台展示',cat:'瀏覽功能',item:'瀏覽功能-標籤雲功能(如有)',risk:'normal'},
+{id:'CHK133',attr:'前台展示',cat:'瀏覽功能',item:'其他',risk:'high'},
+{id:'CHK134',attr:'前台展示',cat:'資料簡目頁面',item:'後分類篩選功能正常',risk:'high'},
+{id:'CHK135',attr:'前台展示',cat:'資料簡目頁面',item:'排列方式顯示正常(圖文並列、清單等)',risk:'high'},
+{id:'CHK136',attr:'前台展示',cat:'資料簡目頁面',item:'儲存功能正常',risk:'high'},
+{id:'CHK137',attr:'前台展示',cat:'資料簡目頁面',item:'列印/匯出友善版面',risk:'high'},
+{id:'CHK138',attr:'前台展示',cat:'資料簡目頁面',item:'收藏功能正常',risk:'high'},
+{id:'CHK139',attr:'前台展示',cat:'資料簡目頁面',item:'發送Email功能正常',risk:'high'},
+{id:'CHK140',attr:'前台展示',cat:'資料簡目頁面',item:'翻頁功能正常(上下頁、頁碼輸入等)',risk:'high'},
+{id:'CHK141',attr:'前台展示',cat:'資料簡目頁面',item:'資料勾選及取消(單筆、全選等)',risk:'high'},
+{id:'CHK142',attr:'前台展示',cat:'資料簡目頁面',item:'其他',risk:'high'},
+{id:'CHK143',attr:'前台展示',cat:'典藏品詳細頁面',item:'Metadata完整顯示',risk:'high'},
+{id:'CHK144',attr:'前台展示',cat:'典藏品詳細頁面',item:'Metadata連結功能正常',risk:'high'},
+{id:'CHK145',attr:'前台展示',cat:'典藏品詳細頁面',item:'圖片檢視器顯示正常',risk:'high'},
+{id:'CHK146',attr:'前台展示',cat:'典藏品詳細頁面',item:'圖片各項功能正常(縮放、旋轉、翻頁等)',risk:'high'},
+{id:'CHK147',attr:'前台展示',cat:'典藏品詳細頁面',item:'圖片完整呈現(破圖、掉頁等)',risk:'high'},
+{id:'CHK148',attr:'前台展示',cat:'典藏品詳細頁面',item:'多圖片輪播功能(如有)',risk:'high'},
+{id:'CHK149',attr:'前台展示',cat:'典藏品詳細頁面',item:'高解析度圖片檢視(如有)',risk:'high'},
+{id:'CHK150',attr:'前台展示',cat:'典藏品詳細頁面',item:'社群分享功能(如有)',risk:'normal'},
+{id:'CHK151',attr:'前台展示',cat:'典藏品詳細頁面',item:'列印/匯出友善版面',risk:'normal'},
+{id:'CHK152',attr:'前台展示',cat:'典藏品詳細頁面',item:'收藏功能正常',risk:'high'},
+{id:'CHK153',attr:'前台展示',cat:'典藏品詳細頁面',item:'永久連結(Permalink)功能(如有)',risk:'high'},
+{id:'CHK154',attr:'前台展示',cat:'典藏品詳細頁面',item:'引用格式提供(如有)',risk:'normal'},
+{id:'CHK155',attr:'前台展示',cat:'典藏品詳細頁面',item:'勘誤回報(如有)',risk:'normal'},
+{id:'CHK156',attr:'前台展示',cat:'典藏品詳細頁面',item:'複製連結(如有)',risk:'normal'},
+{id:'CHK157',attr:'前台展示',cat:'典藏品詳細頁面',item:'其他',risk:'high'},
+{id:'CHK158',attr:'前台展示',cat:'多媒體功能',item:'影片/音訊播放器顯示正常',risk:'high'},
+{id:'CHK159',attr:'前台展示',cat:'多媒體功能',item:'播放控制功能完整',risk:'high'},
+{id:'CHK160',attr:'前台展示',cat:'多媒體功能',item:'播放各項功能正常(暫停、快速等)',risk:'high'},
+{id:'CHK161',attr:'前台展示',cat:'多媒體功能',item:'播放流暢度',risk:'normal'},
+{id:'CHK162',attr:'前台展示',cat:'多媒體功能',item:'其他',risk:'high'},
+{id:'CHK163',attr:'前台展示',cat:'使用者功能',item:'會員功能-註冊功能',risk:'high'},
+{id:'CHK164',attr:'前台展示',cat:'使用者功能',item:'會員功能-登入/登出',risk:'high'},
+{id:'CHK165',attr:'前台展示',cat:'使用者功能',item:'會員功能-個人資料管理',risk:'high'},
+{id:'CHK166',attr:'前台展示',cat:'使用者功能',item:'會員功能-密碼修改功能',risk:'high'},
+{id:'CHK167',attr:'前台展示',cat:'使用者功能',item:'個人化功能-收藏/取消清單功能',risk:'high'},
+{id:'CHK168',attr:'前台展示',cat:'使用者功能',item:'個人化功能-瀏覽歷史記錄',risk:'normal'},
+{id:'CHK169',attr:'前台展示',cat:'使用者功能',item:'個人化功能-註記/筆記功能(如有)',risk:'normal'},
+{id:'CHK170',attr:'前台展示',cat:'使用者功能',item:'個人化功能-自訂清單/集合(如有)',risk:'normal'},
+{id:'CHK171',attr:'前台展示',cat:'使用者功能',item:'社群功能-內容回報機制(意見、勘誤等)',risk:'high'},
+{id:'CHK172',attr:'前台展示',cat:'使用者功能',item:'其他',risk:'normal'},
+{id:'CHK173',attr:'前台展示',cat:'主題策展頁面',item:'策展主題顯示正常',risk:'high'},
+{id:'CHK174',attr:'前台展示',cat:'主題策展頁面',item:'策展內容題顯示正常',risk:'high'},
+{id:'CHK175',attr:'前台展示',cat:'主題策展頁面',item:'其他',risk:'high'},
+{id:'CHK176',attr:'前後台連動',cat:'資料同步',item:'後台新增資料前台即時顯示',risk:'urgent'},
+{id:'CHK177',attr:'前後台連動',cat:'資料同步',item:'後台修改資料前台同步更新',risk:'urgent'},
+{id:'CHK178',attr:'前後台連動',cat:'資料同步',item:'後台刪除資料前台移除',risk:'urgent'},
+{id:'CHK179',attr:'前後台連動',cat:'資料同步',item:'發布/下架機制正常',risk:'high'},
+{id:'CHK180',attr:'前後台連動',cat:'資料同步',item:'其他',risk:'high'},
+{id:'CHK181',attr:'效能與相容性',cat:'效能測試',item:'大量資料處理效能',risk:'high'},
+{id:'CHK182',attr:'效能與相容性',cat:'瀏覽器相容性',item:'Chrome最新版正常',risk:'high'},
+{id:'CHK183',attr:'效能與相容性',cat:'瀏覽器相容性',item:'Firefox最新版正常',risk:'high'},
+{id:'CHK184',attr:'效能與相容性',cat:'瀏覽器相容性',item:'Safari最新版正常',risk:'high'},
+{id:'CHK185',attr:'效能與相容性',cat:'瀏覽器相容性',item:'Edge最新版正常',risk:'high'},
+{id:'CHK186',attr:'效能與相容性',cat:'瀏覽器相容性',item:'行動版Safari正常',risk:'high'},
+{id:'CHK187',attr:'效能與相容性',cat:'瀏覽器相容性',item:'行動版Chrome正常',risk:'high'},
+{id:'CHK188',attr:'效能與相容性',cat:'裝置相容性',item:'桌機(1920x1080)顯示正常',risk:'high'},
+{id:'CHK189',attr:'效能與相容性',cat:'裝置相容性',item:'筆電(1366x768)顯示正常',risk:'high'},
+{id:'CHK190',attr:'效能與相容性',cat:'裝置相容性',item:'平板(iPad)顯示正常',risk:'high'},
+{id:'CHK191',attr:'效能與相容性',cat:'裝置相容性',item:'手機(iPhone/Android)顯示正常',risk:'high'},
+{id:'CHK192',attr:'效能與相容性',cat:'裝置相容性',item:'直式/橫式切換正常',risk:'normal'},
+{id:'CHK193',attr:'其他功能',cat:'多語系',item:'語系切換功能',risk:'high'},
+{id:'CHK194',attr:'其他功能',cat:'多語系',item:'各語系內容完整',risk:'high'},
+{id:'CHK195',attr:'其他功能',cat:'多語系',item:'各語系版面正常',risk:'high'},
+{id:'CHK196',attr:'其他功能',cat:'通知機制',item:'Email通知寄送正常',risk:'high'},
+{id:'CHK197',attr:'其他功能',cat:'通知機制',item:'通知內容正確',risk:'high'},
+{id:'CHK198',attr:'其他功能',cat:'通知機制',item:'系統訊息顯示',risk:'normal'}
+];
+
+const ATTR_ICON = {
+    '後台管理':'🖥️', '前台展示':'🌐', '前後台連動':'🔗',
+    '效能與相容性':'⚡', '其他功能':'🔧'
+};
+
+const RISK_CFG = {
+    urgent:     { cls:'r-urgent',     label:'🔴 緊急' },
+    high:       { cls:'r-high',       label:'🟠 優先' },
+    normal:     { cls:'r-normal',     label:'🟡 普通' },
+    suggestion: { cls:'r-suggestion', label:'🟢 建議' }
+};
+
+// ===== Firebase Firestore =====
+const firestoreDB = firebase.firestore();
+
+async function dbGet(key) {
+    try {
+        const docSnap = await firestoreDB.collection('appData').doc(key).get();
+        if (docSnap.exists()) return docSnap.data().value;
+        return undefined;
+    } catch(e) {
+        console.warn('dbGet error:', e);
+        return undefined;
+    }
+}
+async function dbSet(key, value) {
+    try {
+        await firestoreDB.collection('appData').doc(key).set({ value });
+    } catch(e) {
+        console.warn('dbSet error:', e);
+    }
+}
+
+let testResults = {};
+let issues = [];
+let currentAttr = null;
+let currentCat = null;
+let currentFilter = 'all';
+
+// ===== 初始化 =====
+// ===== 全域變數 =====
+let CHECKLIST_ITEMS = [];  // 改為變數，從 DB 載入
+let currentProjectId = null;
+
+window.onload = async function() {
+    try {
+        // 載入或初始化檢測清單
+        let savedItems = await dbGet('checklistItems');
+        if (!savedItems) {
+            // 第一次使用，儲存預設清單
+            savedItems = CHECKLIST_ITEMS_DEFAULT;
+            await dbSet('checklistItems', savedItems);
+        }
+        CHECKLIST_ITEMS = savedItems;
+        
+        // 載入或建立預設專案
+        let projects = await dbGet('projects') || [];
+        currentProjectId = await dbGet('currentProject');
+        
+        if (!currentProjectId || !projects.find(p => p.id === currentProjectId)) {
+            // 建立預設專案
+            const defaultProj = {
+                id: 'PROJ-' + new Date().toISOString().split('T')[0].replace(/-/g, '') + '-001',
+                name: '預設專案',
+                client: '',
+                pm: '',
+                engineers: '',
+                dateRange: '',
+                createdAt: new Date().toISOString().split('T')[0],
+                status: 'active'
+            };
+            projects.push(defaultProj);
+            await dbSet('projects', projects);
+            currentProjectId = defaultProj.id;
+            await dbSet('currentProject', currentProjectId);
+        }
+        
+        // 載入當前專案資訊
+        const currentProj = projects.find(p => p.id === currentProjectId);
+        if (currentProj) {
+            document.getElementById('clientName').value = currentProj.client || '';
+            document.getElementById('projectName').value = currentProj.name || '';
+            document.getElementById('pmName').value = currentProj.pm || '';
+            document.getElementById('engineers').value = currentProj.engineers || '';
+            // 合併顯示起迄時間
+            const dateRange = [currentProj.startDate, currentProj.endDate].filter(d => d).join(' ~ ');
+            document.getElementById('dateRange').value = dateRange || '';
+        }
+        
+        // 載入問題清單
+        const savedIssues = await dbGet(currentProjectId ? `issues_${currentProjectId}` : 'issues');
+        if (savedIssues) issues = savedIssues;
+        
+        // 載入當前專案的檢測記錄
+        const saved = await dbGet(`results_${currentProjectId}`);
+        if (saved) testResults = saved;
+        
+    } catch(e) { console.warn(e); }
+
+    buildSidebar();
+    updateGlobalStats();
+    
+    // 恢復上次選擇的類別
+    const lastAttr = currentProjectId ? await dbGet(`lastCheckedAttr_${currentProjectId}`) : null;
+    const lastCat = currentProjectId ? await dbGet(`lastCheckedCat_${currentProjectId}`) : null;
+    if (lastAttr && lastCat) {
+        // 展開對應的屬性
+        const attrHeader = document.querySelector(`.attr-header[data-attr="${lastAttr}"]`);
+        if (attrHeader) {
+            const catList = document.querySelector(`.cat-list[data-attr="${lastAttr}"]`);
+            const arrow = attrHeader.querySelector('.attr-arrow');
+            if (catList) catList.classList.add('open');
+            if (arrow) arrow.classList.add('open');
+            attrHeader.classList.add('active');
+        }
+        // 選擇該類別
+        selectCat(lastAttr, lastCat);
+
+        // 捲動到上次操作的項目
+        const lastItemId = currentProjectId ? await dbGet(`lastItemId_${currentProjectId}`) : null;
+        if (lastItemId) {
+            setTimeout(() => {
+                const row = document.querySelector(`tr[data-id="${lastItemId}"]`);
+                if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 150);
+        }
+    }
+    updateProjectDisplay();
+
+    // 專案資訊欄位已改為唯讀，請至「專案管理」修改
+
+    // 統計卡片點擊篩選
+    document.querySelectorAll('.stat-card').forEach(card => {
+        const filter = card.dataset.filter;
+        // 完成率和通過率不可點擊
+        if (filter === 'completion' || filter === 'passrate') return;
+        
+        card.addEventListener('click', function() {
+            currentFilter = this.dataset.filter;
+            document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            
+            // 如果點擊「測試不通過」或「不適用」，切換到跨分類模式
+            if (currentFilter === 'failed' || currentFilter === 'na') {
+                renderCrossCategory(currentFilter);
+            } else {
+                renderTable();
+            }
+        });
+    });
+
+    // 新專案：若沒有任何檢測記錄且未曾關閉過歡迎框，顯示歡迎提示
+    const welcomed = await dbGet(`welcomed_${currentProjectId}`);
+    if (Object.keys(testResults).length === 0 && !welcomed) {
+        document.getElementById('welcomeOverlay').classList.add('show');
+    }
+};
+
+
+
+async function saveResults() {
+    if (!currentProjectId) return;
+    try { 
+        await dbSet(`results_${currentProjectId}`, testResults); 
+    } catch(e) { console.warn(e); }
+}
+
+// ===== 建構左側導覽 =====
+function buildSidebar() {
+    
+    // 強制檢查
+    if (!CHECKLIST_ITEMS || CHECKLIST_ITEMS.length === 0) {
+        console.error('❌ CHECKLIST_ITEMS 是空的！');
+        const sidebar = document.getElementById('sidebar');
+        sidebar.innerHTML = '<div class="sidebar-title">📂 檢測類別</div><div style="padding:20px;color:#ef4444;">錯誤：檢測清單載入失敗<br>請重新整理頁面</div>';
+        return;
+    }
+    
+    const tree = {};
+    CHECKLIST_ITEMS.forEach(item => {
+        if (!tree[item.attr]) tree[item.attr] = {};
+        if (!tree[item.attr][item.cat]) tree[item.attr][item.cat] = [];
+        tree[item.attr][item.cat].push(item);
+    });
+
+    const sidebar = document.getElementById('sidebar');
+    let html = '<div class="sidebar-title">📂 檢測類別</div>';
+
+    Object.keys(tree).forEach(attr => {
+        const cats = tree[attr];
+        html += `<div class="attr-group">
+            <div class="attr-header" data-attr="${attr}" onclick="toggleAttr(this)">
+                <span class="attr-arrow">▶</span>
+                ${ATTR_ICON[attr] || '📂'} ${attr}
+            </div>
+            <div class="cat-list" data-attr="${attr}">`;
+        
+        Object.keys(cats).forEach(cat => {
+            html += `<div class="cat-item" data-attr="${attr}" data-cat="${cat}" onclick="selectCat('${attr}','${cat}')">
+                ${cat}<span class="cat-badge" id="badge-${attr}-${cat}">0/0</span>
+            </div>`;
+        });
+        
+        html += '</div></div>';
+    });
+
+    sidebar.innerHTML = html;
+    updateSidebarBadges();
+}
+
+function updateSidebarBadges() {
+    const tree = {};
+    CHECKLIST_ITEMS.forEach(item => {
+        if (!tree[item.attr]) tree[item.attr] = {};
+        if (!tree[item.attr][item.cat]) tree[item.attr][item.cat] = [];
+        tree[item.attr][item.cat].push(item);
+    });
+
+    Object.keys(tree).forEach(attr => {
+        Object.keys(tree[attr]).forEach(cat => {
+            const items = tree[attr][cat];
+            const passed = items.filter(i => testResults[i.id]?.status === 'passed').length;
+            const failed = items.filter(i => testResults[i.id]?.status === 'failed').length;
+            const na = items.filter(i => testResults[i.id]?.status === 'na').length;
+            const tested = passed + failed + na;
+            const total = items.length;
+
+            const badge = document.getElementById(`badge-${attr}-${cat}`);
+            if (badge) {
+                badge.textContent = `${tested}/${total}`;
+                badge.className = 'cat-badge';
+                if (tested === total) {
+                    badge.classList.add(failed > 0 ? 'cb-fail' : 'cb-pass');
+                }
+            }
+        });
+    });
+}
+
+function toggleAttr(el) {
+    const attr = el.dataset.attr;
+    const catList = document.querySelector(`.cat-list[data-attr="${attr}"]`);
+    const arrow = el.querySelector('.attr-arrow');
+    const isOpen = catList.classList.contains('open');
+
+    document.querySelectorAll('.cat-list').forEach(l => l.classList.remove('open'));
+    document.querySelectorAll('.attr-arrow').forEach(a => a.classList.remove('open'));
+    document.querySelectorAll('.attr-header').forEach(h => h.classList.remove('active'));
+
+    if (!isOpen) {
+        catList.classList.add('open');
+        arrow.classList.add('open');
+        el.classList.add('active');
+    }
+}
+
+async function selectCat(attr, cat) {
+    currentAttr = attr;
+    currentCat = cat;
+    currentFilter = 'all';
+    
+    // 儲存導覽位置
+    if (currentProjectId) await dbSet(`lastCheckedAttr_${currentProjectId}`, attr);
+    if (currentProjectId) await dbSet(`lastCheckedCat_${currentProjectId}`, cat);
+    
+    document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+    document.querySelector('.stat-card[data-filter="all"]')?.classList.add('active');
+    
+    document.querySelectorAll('.cat-item').forEach(el => el.classList.remove('active'));
+    const catEl = document.querySelector(`.cat-item[data-attr="${attr}"][data-cat="${cat}"]`);
+    if (catEl) catEl.classList.add('active');
+
+    document.getElementById('tableTitle').textContent = `${ATTR_ICON[attr] || '📂'} ${attr} › ${cat}`;
+    
+    renderTable();
+}
+
+
+// ===== 跨分類顯示（用於「測試不通過」和「不適用」）=====
+function renderCrossCategory(filterType) {
+    const statusText = filterType === 'failed' ? '❌ 測試不通過' : '🚫 不適用';
+    const allItems = CHECKLIST_ITEMS.filter(i => {
+        const st = testResults[i.id]?.status || 'untested';
+        return st === filterType;
+    });
+    
+    document.getElementById('tableTitle').textContent = `${statusText} - 所有分類（共 ${allItems.length} 項）`;
+    document.getElementById('tableStats').innerHTML = `顯示來自所有分類的項目`;
+    
+    const tbody = document.getElementById('tableBody');
+    if (allItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">目前沒有' + statusText + '的項目</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = allItems.map(item => {
+        const r = testResults[item.id] || {};
+        const st = r.status || 'untested';
+        const rc = RISK_CFG[item.risk] || RISK_CFG.high;
+        const num = item.id.replace('CHK','');
+        
+        const rowCls = st === 'failed' ? 'row-fail' : 'row-na';
+        const afCls = st === 'failed' ? 'af' : '';
+        const anCls = st === 'na' ? 'an' : '';
+        
+        const issueLink = (st === 'failed' && r.issueId)
+            ? `<div><a href="檢測問題管理.html" class="issue-link">🔗 ${r.issueId} 已建立</a></div>`
+            : '';
+        
+        // 顯示屬性和類別
+        const attrBadge = `<span style="background:#e0e7ff;color:#4338ca;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:bold;margin-right:6px;">${item.attr}</span>`;
+        const catBadge = `<span style="background:#fef3c7;color:#92400e;padding:3px 8px;border-radius:4px;font-size:11px;">${item.cat}</span>`;
+        
+        return `<tr class="${rowCls}" data-id="${item.id}">
+            <td class="td-no">${num}</td>
+            <td class="td-item">${attrBadge}${catBadge}<div style="margin-top:6px;">${item.item}</div>${issueLink}</td>
+            <td class="td-risk"><span class="risk-badge ${rc.cls}">${rc.label}</span></td>
+            <td class="td-action"><button class="act-circle" onclick="markRow('${item.id}','passed')">✓</button></td>
+            <td class="td-action"><button class="act-circle ${afCls}" onclick="markRow('${item.id}','failed')">✗</button></td>
+            <td class="td-action"><button class="act-circle ${anCls}" onclick="markRow('${item.id}','na')">—</button></td>
+            <td class="td-who"><input class="who-input" type="text" placeholder="測試人員" value="${r.tester||''}" onchange="saveTester('${item.id}',this.value)"></td>
+            <td class="td-date">${r.date||''}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ===== 渲染表格 =====
+function renderTable() {
+    if (!currentAttr || !currentCat) return;
+
+    const items = CHECKLIST_ITEMS.filter(i => {
+        if (i.attr !== currentAttr || i.cat !== currentCat) return false;
+        const st = testResults[i.id]?.status || 'untested';
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'untested') return st === 'untested';
+        if (currentFilter === 'passed') return st === 'passed';
+        if (currentFilter === 'failed') return st === 'failed';
+        if (currentFilter === 'na') return st === 'na';
+        return true;
+    });
+
+    const allCatItems = CHECKLIST_ITEMS.filter(i => i.attr === currentAttr && i.cat === currentCat);
+    const cPassed = allCatItems.filter(i => testResults[i.id]?.status === 'passed').length;
+    const cFailed = allCatItems.filter(i => testResults[i.id]?.status === 'failed').length;
+    const cNa = allCatItems.filter(i => testResults[i.id]?.status === 'na').length;
+    const cWait = allCatItems.length - cPassed - cFailed - cNa;
+
+    document.getElementById('tableStats').innerHTML = 
+        `<span style="color:#10b981;font-weight:bold;">✅ ${cPassed}</span> / 
+         <span style="color:#ef4444;font-weight:bold;">❌ ${cFailed}</span> / 
+         <span style="color:#94a3b8;">⏳ ${cWait}</span>`;
+
+    const tbody = document.getElementById('tableBody');
+    if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">沒有符合條件的項目</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = items.map(item => {
+        const r = testResults[item.id] || {};
+        const st = r.status || 'untested';
+        const rc = RISK_CFG[item.risk] || RISK_CFG.high;
+        const num = item.id.replace('CHK','');
+
+        const rowCls = st === 'passed' ? 'row-pass' : st === 'failed' ? 'row-fail' : st === 'na' ? 'row-na' : '';
+        const apCls = st === 'passed' ? 'ap' : '';
+        const afCls = st === 'failed' ? 'af' : '';
+        const anCls = st === 'na' ? 'an' : '';
+
+        const issueLink = (st === 'failed' && r.issueId)
+            ? `<div><a href="檢測問題管理.html" class="issue-link">🔗 ${r.issueId} 已建立</a></div>`
+            : '';
+
+        return `<tr class="${rowCls}" data-id="${item.id}">
+            <td class="td-no">${num}</td>
+            <td class="td-item">${item.item}${issueLink}</td>
+            <td class="td-risk"><span class="risk-badge ${rc.cls}">${rc.label}</span></td>
+            <td class="td-action"><button class="act-circle ${apCls}" onclick="markRow('${item.id}','passed')">✓</button></td>
+            <td class="td-action"><button class="act-circle ${afCls}" onclick="markRow('${item.id}','failed')">✗</button></td>
+            <td class="td-action"><button class="act-circle ${anCls}" onclick="markRow('${item.id}','na')">—</button></td>
+            <td class="td-who"><input class="who-input" value="${r.tester||''}" placeholder="姓名" onchange="saveTester('${item.id}',this.value)"></td>
+            <td class="td-date">${r.date||''}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ===== 標記狀態 =====
+async function markRow(id, newStatus) {
+    // 檢查檢測人員是否已填寫
+    const testerInput = document.querySelector(`.who-input[onchange*="${id}"]`);
+    const tester = testerInput ? testerInput.value.trim() : '';
+    
+    if (!tester) {
+        alert('⚠️ 請先填寫「測試人員」再標記狀態！');
+        testerInput.focus();
+        testerInput.style.border = '2px solid #ef4444';
+        setTimeout(() => { testerInput.style.border = ''; }, 2000);
+        return;
+    }
+    
+    const r = testResults[id] || {};
+    const cur = r.status || 'untested';
+
+    if (cur === newStatus) {
+        delete testResults[id];
+        await saveResults();
+        renderTable();
+        updateGlobalStats();
+        updateSidebarBadges();
+        return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    if (newStatus === 'failed') {
+        const issueId = await createIssue(id);
+        testResults[id] = { status: 'failed', tester, date: today, issueId };
+        showToast(issueId);
+    } else {
+        testResults[id] = { status: newStatus, tester, date: today };
+    }
+
+    await saveResults();
+    // 記住最後操作的項目
+    if (currentProjectId) await dbSet(`lastItemId_${currentProjectId}`, id);
+    
+    
+    // 如果當前在跨分類模式，重新渲染跨分類畫面
+    if (currentFilter === 'failed' || currentFilter === 'na') {
+        renderCrossCategory(currentFilter);
+    } else {
+        renderTable();
+    }
+    
+    updateGlobalStats();
+    updateSidebarBadges();
+}
+
+async function saveTester(id, value) {
+    if (!testResults[id]) testResults[id] = { status: 'untested' };
+    testResults[id].tester = value;
+    await saveResults();
+}
+
+async function createIssue(chkId) {
+    const item = CHECKLIST_ITEMS.find(i => i.id === chkId);
+    if (!item) return null;
+
+    try {
+        const savedIssues = await dbGet(currentProjectId ? `issues_${currentProjectId}` : 'issues');
+        if (savedIssues) issues = savedIssues;
+    } catch(e) {}
+
+    const riskMap = { urgent:'urgent', high:'high', normal:'normal', suggestion:'suggestion' };
+    const now = new Date();
+    const ymd = now.toISOString().split('T')[0].replace(/-/g,'');
+    const seq = String((issues.length + 1)).padStart(3,'0');
+    const newId = `ISS-${ymd}-${seq}`;
+    
+    // 取得檢測人員和日期
+    const result = testResults[chkId] || {};
+    const tester = result.tester || '未填寫';
+    const testDate = result.date || now.toISOString().split('T')[0];
+
+    const newIssue = {
+        id: newId,
+        title: item.item,
+        category: '功能錯誤',
+        status: '待修正',
+        risk: riskMap[item.risk] || 'high',
+        source: `來自檢測項目 ${chkId}`,
+        tags: [item.cat],
+        imgs: [],
+        createdAt: now.toISOString(),  // 加入建立時間
+        versions: [{
+            version: 1,
+            testType: '初測',
+            testDate: testDate,
+            tester: tester,
+            title: item.item,
+            status: '待修正',
+            desc: '檢測項目：' + item.item + '\n' +
+                '檢測屬性：' + item.attr + '\n' +
+                '檢測類別：' + item.cat + '\n\n' +
+                '由檢測項目管理自動建立。',
+            imgs: [],
+            replies: []
+        }],
+        currentVersion: 1,
+        tester: tester,  // 舊格式相容
+        testDate: testDate
+    };
+
+    issues.push(newIssue);
+    try { await dbSet(currentProjectId ? `issues_${currentProjectId}` : 'issues', issues); } catch(e) { console.warn(e); }
+    return newId;
+}
+
+function showToast(issueId) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = `問題 ${issueId}`;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 4000);
+}
+
+function updateGlobalStats() {
+    const total = CHECKLIST_ITEMS.length;
+    const passed = Object.values(testResults).filter(r => r.status === 'passed').length;
+    const failed = Object.values(testResults).filter(r => r.status === 'failed').length;
+    const na = Object.values(testResults).filter(r => r.status === 'na').length;
+    const untested = total - passed - failed - na;
+    
+    // 計算完成率和通過率
+    const tested = passed + failed + na;
+    const completionRate = total > 0 ? Math.round((tested / total) * 100) : 0;
+    const passRate = tested > 0 ? Math.round((passed / tested) * 100) : 0;
+
+    document.getElementById('totalItems').textContent = total;
+    document.getElementById('passedItems').textContent = passed;
+    document.getElementById('failedItems').textContent = failed;
+    document.getElementById('naItems').textContent = na;
+    document.getElementById('untestedItems').textContent = untested;
+    document.getElementById('completionRate').textContent = completionRate + '%';
+    document.getElementById('passRate').textContent = passRate + '%';
+}
+
+async function exportData() {
+    const projectId = await dbGet('currentProject');
+    const projectName = document.getElementById('projectName').value || '未命名專案';
+    const exportDate = new Date().toISOString().split('T')[0];
+
+    const data = {
+        exportType: 'checklistResults',
+        projectId: projectId || '',
+        projectName: projectName,
+        exportDate: exportDate,
+        results: testResults
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${projectName}_檢測記錄_${exportDate}.json`;
+    a.click();
+}
+
+async function importData() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async e => {
+        const reader = new FileReader();
+        reader.onload = async ev => {
+            try {
+                const data = JSON.parse(ev.target.result);
+
+                // 驗證：檔案必須包含 projectId
+                if (!data.projectId) {
+                    alert('❌ 此檔案不含專案識別碼，無法匯入。\n請使用本系統匯出的備份檔。');
+                    return;
+                }
+
+                // 驗證：必須與當前專案相同
+                if (data.projectId !== currentProjectId) {
+                    const projects = await dbGet('projects') || [];
+                    const curProj = projects.find(p => p.id === currentProjectId);
+                    const curName = curProj ? curProj.name : currentProjectId;
+                    alert(`❌ 專案不符，無法匯入。\n\n檔案專案：${data.projectName || data.projectId}\n目前專案：${curName}\n\n請切換到正確的專案後再匯入。`);
+                    return;
+                }
+
+                // 確認覆蓋
+                const projects = await dbGet('projects') || [];
+                const curProj = projects.find(p => p.id === currentProjectId);
+                const curName = curProj ? curProj.name : currentProjectId;
+                const testedCount = Object.keys(testResults).length;
+                const confirmed = confirm(`確定要匯入並覆蓋【${curName}】的檢測記錄嗎？\n\n目前已測 ${testedCount} 項，匯入後將以檔案內容取代，此操作無法復原。`);
+                if (!confirmed) return;
+
+                testResults = data.results || {};
+                await saveResults();
+                renderTable();
+                updateGlobalStats();
+                updateSidebarBadges();
+                alert('✅ 匯入成功！');
+            } catch { alert('❌ 格式錯誤'); }
+        };
+        reader.readAsText(e.target.files[0]);
+    };
+    input.click();
+}
+
+async function resetAll() {
+    if (!confirm('確定要重置所有檢測狀態？此操作無法復原！')) return;
+    testResults = {};
+    await saveResults();
+    
+    // 如果當前在跨分類模式，重新渲染跨分類畫面
+    if (currentFilter === 'failed' || currentFilter === 'na') {
+        renderCrossCategory(currentFilter);
+    } else {
+        renderTable();
+    }
+    
+    updateGlobalStats();
+    updateSidebarBadges();
+}
+
+
+
+function openReport() {
+    const projectName = document.getElementById('projectName').value || '未命名專案';
+    const clientName = document.getElementById('clientName').value || '未設定';
+    const pmName = document.getElementById('pmName').value || '未設定';
+    const engineers = document.getElementById('engineers').value || '未設定';
+    const dateRange = document.getElementById('dateRange').value || '未設定';
+    
+    const total = CHECKLIST_ITEMS.length;
+    const passed = Object.values(testResults).filter(r => r.status === 'passed').length;
+    const failed = Object.values(testResults).filter(r => r.status === 'failed').length;
+    const na = Object.values(testResults).filter(r => r.status === 'na').length;
+    const untested = total - passed - failed - na;
+    const completionRate = total > 0 ? Math.round(((passed + failed + na) / total) * 100) : 0;
+    const passRate = (passed + failed + na) > 0 ? Math.round((passed / (passed + failed + na)) * 100) : 0;
+    
+    const reportWin = window.open('', '_blank');
+    if (!reportWin) return alert("請允許彈出視窗以顯示報表");
+    
+    // 依屬性統計
+    const attrStats = {};
+    [...new Set(CHECKLIST_ITEMS.map(i => i.attr))].forEach(attr => {
+        const items = CHECKLIST_ITEMS.filter(i => i.attr === attr);
+        const attrPassed = items.filter(i => testResults[i.id]?.status === 'passed').length;
+        const attrFailed = items.filter(i => testResults[i.id]?.status === 'failed').length;
+        const attrNa = items.filter(i => testResults[i.id]?.status === 'na').length;
+        const attrTested = attrPassed + attrFailed + attrNa;
+        attrStats[attr] = {
+            total: items.length,
+            tested: attrTested,
+            passed: attrPassed,
+            failed: attrFailed,
+            na: attrNa
+        };
+    });
+    
+    let html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>檢測執行報告 - ${projectName}</title>
+    <style>
+        @page { size: A4; margin: 1cm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft JhengHei", Arial, sans-serif; background: #f5f7fa; padding: 15px; }
+        .report-container { background: white; max-width: 1000px; margin: auto; padding: 30px; border-radius: 8px; box-shadow: 0 2 8px rgba(0,0,0,0.1); }
+        
+        /* 標題區 */
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #667eea; padding-bottom: 12px; margin-bottom: 20px; }
+        .header h1 { color: #1e293b; font-size: 24px; margin: 0; }
+        .header .report-date { color: #64748b; font-size: 13px; }
+        
+        /* 專案資訊區 - 緊湊型，調整順序 */
+        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 15px; background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+        .info-item { display: flex; align-items: baseline; font-size: 15px; }
+        .info-item .label { color: #64748b; font-weight: 600; margin-right: 8px; min-width: 70px; }
+        .info-item .value { color: #1e293b; }
+        
+        /* 核心指標 - 4個並排 */
+        .metrics-row { display: flex; gap: 15px; margin-bottom: 20px; }
+        .metric-card { flex: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; text-align: center; }
+        .metric-card.secondary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .metric-card.tertiary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .metric-card.quaternary { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .metric-number { font-size: 28px; font-weight: bold; display: block; margin-bottom: 2px; }
+        .metric-label { font-size: 12px; opacity: 0.95; }
+        
+        /* 進度區塊 */
+        .progress-section { margin-bottom: 20px; }
+        .section-title { color: #1e293b; font-size: 16px; font-weight: bold; margin-bottom: 10px; padding-left: 10px; border-left: 4px solid #667eea; }
+        .progress-bar { background: #e2e8f0; height: 24px; border-radius: 12px; overflow: hidden; margin-bottom: 10px; border: 1px solid #cbd5e1; }
+        .progress-fill { height: 100%; display: flex; }
+        .progress-segment { display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold; }
+        .seg-pass { background: #10b981; }
+        .seg-fail { background: #ef4444; }
+        .seg-na { background: #94a3b8; }
+        .seg-wait { background: #f59e0b; }
+        .legend { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; }
+        .legend-color { width: 14px; height: 14px; border-radius: 3px; }
+        
+        /* 統計表 */
+        .stats-section { margin-bottom: 20px; }
+        .summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .summary-table thead tr { background: #1e3a5f; color: white; }
+        .summary-table th { padding: 10px; text-align: left; font-weight: 600; }
+        .summary-table th:not(:first-child) { text-align: center; }
+        .summary-table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        .summary-table tbody tr:hover { background: #f8fafc; }
+        .summary-table td:first-child { font-weight: 600; color: #1e293b; }
+        .summary-table td:not(:first-child) { text-align: center; }
+        
+        /* 底部按鈕 */
+        .footer { text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+        .print-btn { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+        .print-btn:hover { background: #5568d3; transform: translateY(-1px); }
+        
+        /* 強制列印時保留背景色 */
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        
+        @media print {
+            body { background: white; padding: 0; }
+            .report-container { box-shadow: none; padding: 20px; }
+            .print-btn { display: none; }
+        }
+
+        /* 新專案提示 Modal */
+        .welcome-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; }
+        .welcome-overlay.show { display:flex; }
+        .welcome-box { background:white; border-radius:16px; padding:36px 40px; max-width:520px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3); text-align:center; }
+        .welcome-box h2 { font-size:22px; color:#1e293b; margin-bottom:12px; }
+        .welcome-box p { color:#64748b; font-size:14px; line-height:1.7; margin-bottom:8px; }
+        .welcome-box .warn { color:#dc2626; font-size:13px; font-weight:bold; margin-bottom:24px; }
+        .welcome-actions { display:flex; flex-direction:column; gap:12px; }
+        .welcome-btn { padding:12px 20px; border:none; border-radius:8px; font-size:14px; font-weight:bold; cursor:pointer; }
+        .welcome-btn-primary { background:#7c3aed; color:white; }
+        .welcome-btn-secondary { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+        .welcome-btn-download { background:#0ea5e9; color:white; }
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <!-- 標題區 -->
+        <div class="header">
+            <h1>📊 檢測執行報告</h1>
+            <div class="report-date">報告日期：${new Date().toISOString().split('T')[0]}</div>
+        </div>
+        
+        <!-- 專案資訊 - 按您要求的順序 -->
+        <div class="info-grid">
+            <div class="info-item"><span class="label">客戶名稱</span><span class="value">${clientName}</span></div>
+            <div class="info-item" style="grid-column: span 2;"><span class="label">專案名稱</span><span class="value">${projectName}</span></div>
+            <div class="info-item"><span class="label">PM</span><span class="value">${pmName}</span></div>
+            <div class="info-item" style="grid-column: span 2;"><span class="label">專案時程</span><span class="value">${dateRange}</span></div>
+            <div class="info-item" style="grid-column: span 3;"><span class="label">工程師</span><span class="value">${engineers}</span></div>
+        </div>
+        
+        <!-- 核心指標 - 4個並排 -->
+        <div class="metrics-row">
+            <div class="metric-card">
+                <span class="metric-number">${completionRate}%</span>
+                <div class="metric-label">完成率</div>
+            </div>
+            <div class="metric-card secondary">
+                <span class="metric-number">${passRate}%</span>
+                <div class="metric-label">通過率</div>
+            </div>
+            <div class="metric-card tertiary">
+                <span class="metric-number">${passed}</span>
+                <div class="metric-label">測試通過</div>
+            </div>
+            <div class="metric-card quaternary">
+                <span class="metric-number">${failed}</span>
+                <div class="metric-label">測試不通過</div>
+            </div>
+        </div>
+        
+        <!-- 進度總覽 -->
+        <div class="progress-section">
+            <div class="section-title">檢測進度總覽（共 ${total} 項）</div>
+            <div class="progress-bar">
+                <div class="progress-fill">`;
+    
+    if (passed > 0) html += `<div class="progress-segment seg-pass" style="width: ${(passed/total*100)}%">${passed}</div>`;
+    if (failed > 0) html += `<div class="progress-segment seg-fail" style="width: ${(failed/total*100)}%">${failed}</div>`;
+    if (na > 0) html += `<div class="progress-segment seg-na" style="width: ${(na/total*100)}%">${na}</div>`;
+    if (untested > 0) html += `<div class="progress-segment seg-wait" style="width: ${(untested/total*100)}%">${untested}</div>`;
+    
+    html += `</div>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color seg-pass"></div><span>測試通過 ${passed}</span></div>
+                <div class="legend-item"><div class="legend-color seg-fail"></div><span>測試不通過 ${failed}</span></div>
+                <div class="legend-item"><div class="legend-color seg-na"></div><span>不適用 ${na}</span></div>
+                <div class="legend-item"><div class="legend-color seg-wait"></div><span>尚未測試 ${untested}</span></div>
+            </div>
+        </div>
+        
+        <!-- 各屬性統計 -->
+        <div class="stats-section">
+            <div class="section-title">各屬性檢測統計</div>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>檢測屬性</th>
+                        <th>總項目</th>
+                        <th>已測試</th>
+                        <th>通過</th>
+                        <th>不通過</th>
+                        <th>不適用</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    Object.keys(attrStats).forEach(attr => {
+        const stats = attrStats[attr];
+        html += `<tr>
+            <td>${attr}</td>
+            <td>${stats.total}</td>
+            <td>${stats.tested}</td>
+            <td style="color: #10b981; font-weight: 600;">${stats.passed}</td>
+            <td style="color: #ef4444; font-weight: 600;">${stats.failed}</td>
+            <td style="color: #94a3b8;">${stats.na}</td>
+        </tr>`;
+    });
+    
+    html += `</tbody>
+            </table>
+        </div>
+        
+        <!-- 底部 -->
+        <div class="footer">
+            <button class="print-btn" onclick="window.print()">🖨️ 列印報告</button>
+        </div>
+    </div>
+</body>
+</html>`;
+    
+    reportWin.document.write(html);
+    reportWin.document.close();
+}
+
+// 更新專案顯示
+async function updateProjectDisplay() {
+    if (!currentProjectId) return;
+    const projects = await dbGet('projects') || [];
+    const proj = projects.find(p => p.id === currentProjectId);
+    if (proj) {
+        document.getElementById('currentProjectDisplay').textContent = 
+            `📁 目前專案：${proj.name || '未命名'} (${proj.id})`;
+    }
+}
+
+// ===== CSV 匯出檢測清單 =====
+function exportChecklistCSV() {
+    // CSV 標頭
+    let csv = '序號,檢測屬性,檢測類別,檢測項目,處理順序\n';
+    
+    // 轉換資料
+    CHECKLIST_ITEMS.forEach(item => {
+        const num = item.id.replace('CHK', '');
+        const risk_zh = {
+            urgent: '緊急',
+            high: '優先',
+            normal: '普通',
+            suggestion: '建議'
+        }[item.risk] || item.risk;
+        
+        // 處理可能包含逗號或換行的欄位
+        const itemText = `"${item.item.replace(/"/g, '""')}"`;
+        
+        csv += `${num},${item.attr},${item.cat},${itemText},${risk_zh}\n`;
+    });
+    
+    // 下載
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `檢測清單項目-${CHECKLIST_ITEMS.length}項.csv`;
+    link.click();
+    
+    alert('✅ CSV 已匯出！\n\n可用 Excel 開啟編輯後再匯入。');
+}
+
+function exportResultsCSV() {
+    const projectName = document.getElementById('projectName').value || '未命名專案';
+    const exportDate = new Date().toISOString().split('T')[0];
+    
+    // CSV 標頭
+    let csv = '序號,檢測屬性,檢測類別,檢測項目,處理順序,檢測狀態,檢測人員,檢測日期,問題編號\n';
+    
+    // 轉換資料
+    CHECKLIST_ITEMS.forEach(item => {
+        const num = item.id.replace('CHK', '');
+        const result = testResults[item.id] || {};
+        
+        const risk_zh = {
+            urgent: '緊急',
+            high: '優先',
+            normal: '普通',
+            suggestion: '建議'
+        }[item.risk] || item.risk;
+        
+        const status_zh = {
+            passed: '通過',
+            failed: '不通過',
+            na: '不適用',
+            untested: '尚未測試'
+        }[result.status] || '尚未測試';
+        
+        // 處理可能包含逗號或換行的欄位
+        const itemText = `"${item.item.replace(/"/g, '""')}"`;
+        const tester = result.tester || '';
+        const date = result.date || '';
+        const issueId = result.issueId || '';
+        
+        csv += `${num},${item.attr},${item.cat},${itemText},${risk_zh},${status_zh},${tester},${date},${issueId}\n`;
+    });
+    
+    // 下載
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${projectName}_測驗結果_${exportDate}.csv`;
+    link.click();
+}
+
+async function exportFullReportExcel() {
+    const projectName = document.getElementById('projectName').value || '未命名專案';
+    const clientName = document.getElementById('clientName').value || '未設定';
+    const pmName = document.getElementById('pmName').value || '未設定';
+    const engineers = document.getElementById('engineers').value || '未設定';
+    const dateRange = document.getElementById('dateRange').value || '未設定';
+    const exportDate = new Date().toISOString().split('T')[0];
+    
+    // 計算統計數據
+    const total = CHECKLIST_ITEMS.length;
+    const passed = Object.values(testResults).filter(r => r.status === 'passed').length;
+    const failed = Object.values(testResults).filter(r => r.status === 'failed').length;
+    const na = Object.values(testResults).filter(r => r.status === 'na').length;
+    const untested = total - passed - failed - na;
+    const tested = passed + failed + na;
+    const completionRate = total > 0 ? Math.round((tested / total) * 100) : 0;
+    const passRate = tested > 0 ? Math.round((passed / tested) * 100) : 0;
+    
+    // 各屬性統計
+    const attrStats = {};
+    [...new Set(CHECKLIST_ITEMS.map(i => i.attr))].forEach(attr => {
+        const items = CHECKLIST_ITEMS.filter(i => i.attr === attr);
+        const attrPassed = items.filter(i => testResults[i.id]?.status === 'passed').length;
+        const attrFailed = items.filter(i => testResults[i.id]?.status === 'failed').length;
+        const attrNa = items.filter(i => testResults[i.id]?.status === 'na').length;
+        const attrTested = attrPassed + attrFailed + attrNa;
+        attrStats[attr] = {
+            total: items.length,
+            tested: attrTested,
+            passed: attrPassed,
+            failed: attrFailed,
+            na: attrNa
+        };
+    });
+    
+    // ========== 工作表1：檢測摘要 ==========
+    const summaryData = [
+        ['檢測執行報告'],
+        [],
+        ['專案資訊'],
+        ['客戶名稱', clientName],
+        ['專案名稱', projectName],
+        ['PM', pmName],
+        ['工程師', engineers],
+        ['專案時程', dateRange],
+        ['報告日期', exportDate],
+        [],
+        ['檢測統計'],
+        ['項目', '數量', '百分比'],
+        ['總檢測項目', total, ''],
+        ['測試通過', passed, ''],
+        ['測試不通過', failed, ''],
+        ['不適用', na, ''],
+        ['尚未測試', untested, ''],
+        ['完成率', completionRate + '%', ''],
+        ['通過率', passRate + '%', ''],
+        [],
+        ['各屬性檢測統計'],
+        ['檢測屬性', '總項目', '已測試', '通過', '不通過', '不適用']
+    ];
+    
+    // 加入各屬性統計
+    Object.keys(attrStats).forEach(attr => {
+        const stats = attrStats[attr];
+        summaryData.push([attr, stats.total, stats.tested, stats.passed, stats.failed, stats.na]);
+    });
+    
+    const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+    
+    // 設定欄寬
+    ws1['!cols'] = [
+        { wch: 20 },
+        { wch: 40 },
+        { wch: 15 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 }
+    ];
+    
+    // 合併標題儲存格
+    ws1['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },  // 標題
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 1 } },  // 專案資訊
+        { s: { r: 10, c: 0 }, e: { r: 10, c: 1 } }, // 檢測統計
+        { s: { r: 20, c: 0 }, e: { r: 20, c: 5 } }  // 各屬性統計
+    ];
+    
+    // 設定樣式
+    summaryData.forEach((row, rowIdx) => {
+        row.forEach((cell, colIdx) => {
+            const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
+            if (!ws1[cellRef]) return;
+            
+            // 標題列
+            if (rowIdx === 0 || rowIdx === 2 || rowIdx === 10 || rowIdx === 20 || rowIdx === 11 || rowIdx === 21) {
+                ws1[cellRef].s = {
+                    font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } },
+                    fill: { fgColor: { rgb: "1e3a5f" } },
+                    alignment: { horizontal: "center", vertical: "center" }
+                };
+            }
+        });
+    });
+    
+    // ========== 工作表2：檢測明細 ==========
+    const detailData = [
+        ['序號', '檢測屬性', '檢測類別', '檢測項目', '處理順序', '檢測狀態', '檢測人員', '檢測日期', '問題編號']
+    ];
+    
+    // 依屬性分組
+    [...new Set(CHECKLIST_ITEMS.map(i => i.attr))].forEach(attr => {
+        const items = CHECKLIST_ITEMS.filter(i => i.attr === attr);
+        
+        items.forEach(item => {
+            const num = item.id.replace('CHK', '');
+            const result = testResults[item.id] || {};
+            
+            const risk_zh = {
+                urgent: '緊急',
+                high: '優先',
+                normal: '普通',
+                suggestion: '建議'
+            }[item.risk] || item.risk;
+            
+            const status_zh = {
+                passed: '通過',
+                failed: '不通過',
+                na: '不適用',
+                untested: '尚未測試'
+            }[result.status] || '尚未測試';
+            
+            detailData.push([
+                num,
+                item.attr,
+                item.cat,
+                item.item,
+                risk_zh,
+                status_zh,
+                result.tester || '',
+                result.date || '',
+                result.issueId || ''
+            ]);
+        });
+    });
+    
+    const ws2 = XLSX.utils.aoa_to_sheet(detailData);
+    
+    // 設定欄寬
+    ws2['!cols'] = [
+        { wch: 8 },   // 序號
+        { wch: 15 },  // 屬性
+        { wch: 20 },  // 類別
+        { wch: 50 },  // 項目
+        { wch: 12 },  // 處理順序
+        { wch: 12 },  // 狀態
+        { wch: 12 },  // 人員
+        { wch: 12 },  // 日期
+        { wch: 18 }   // 問題編號
+    ];
+    
+    // 標題列樣式
+    for (let col = 0; col < 9; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+        ws2[cellRef].s = {
+            font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "1e3a5f" } },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+    }
+    
+    // 依狀態設定內容行顏色
+    for (let row = 1; row < detailData.length; row++) {
+        const status = detailData[row][5]; // 檢測狀態欄
+        let bgColor = "FFFFFF";
+        
+        if (status === '通過') bgColor = "d1fae5";
+        else if (status === '不通過') bgColor = "fee2e2";
+        else if (status === '不適用') bgColor = "f3f4f6";
+        
+        for (let col = 0; col < 9; col++) {
+            const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+            if (ws2[cellRef]) {
+                ws2[cellRef].s = {
+                    fill: { fgColor: { rgb: bgColor } },
+                    alignment: { vertical: "center" }
+                };
+            }
+        }
+    }
+    
+    // 建立工作簿
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, ws1, "檢測摘要");
+    XLSX.utils.book_append_sheet(workbook, ws2, "檢測明細");
+    
+    // 匯出
+    XLSX.writeFile(workbook, `${projectName}_檢測報告_${exportDate}.xlsx`);
+}
+
+
+
+
+// ===== CSV 匯入檢測清單 =====
+async function importChecklistCSV() {
+    // 已確認清單後鎖定，不允許再更換
+    const welcomed = await dbGet(`welcomed_${currentProjectId}`);
+    if (welcomed) {
+        alert('⚠️ 檢測清單已確認，無法再更換。\n\n若需使用新清單，請建立新專案。');
+        return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    
+    input.onchange = async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async function(event) {
+            try {
+                const csv = event.target.result;
+                const lines = csv.split('\n');
+                
+                // 跳過標頭
+                const dataLines = lines.slice(1).filter(line => line.trim());
+                
+                if (dataLines.length === 0) {
+                    alert('❌ CSV 檔案沒有資料！');
+                    return;
+                }
+                
+                // 解析 CSV
+                const newItems = [];
+                const errors = [];
+                
+                dataLines.forEach((line, index) => {
+                    try {
+                        // 簡易 CSV 解析（處理引號內的逗號）
+                        const parts = parseCSVLine(line);
+                        
+                        if (parts.length < 5) {
+                            errors.push(`第 ${index + 2} 行：欄位不足`);
+                            return;
+                        }
+                        
+                        const [num, attr, cat, item, risk_zh] = parts;
+                        
+                        // 驗證檢測屬性
+                        const validAttrs = ['後台管理', '前台展示', '前後台連動', '效能與相容性', '其他功能'];
+                        if (!validAttrs.includes(attr.trim())) {
+                            errors.push(`第 ${index + 2} 行：檢測屬性「${attr}」不正確`);
+                            return;
+                        }
+                        
+                        // 轉換處理順序
+                        const riskMap = {
+                            '緊急': 'urgent',
+                            '優先': 'high',
+                            '普通': 'normal',
+                            '建議': 'suggestion'
+                        };
+                        const risk = riskMap[risk_zh.trim()] || 'high';
+                        
+                        newItems.push({
+                            id: `CHK${num.padStart(3, '0')}`,
+                            attr: attr.trim(),
+                            cat: cat.trim(),
+                            item: item.trim(),
+                            risk: risk
+                        });
+                        
+                    } catch (err) {
+                        errors.push(`第 ${index + 2} 行：解析錯誤 - ${err.message}`);
+                    }
+                });
+                
+                // 顯示錯誤
+                if (errors.length > 0) {
+                    const showErrors = errors.slice(0, 10).join('\n');
+                    const more = errors.length > 10 ? `\n... 還有 ${errors.length - 10} 個錯誤` : '';
+                    alert(`⚠️ 發現 ${errors.length} 個錯誤：\n\n${showErrors}${more}\n\n請修正後重新匯入。`);
+                    return;
+                }
+                
+                // 確認更新
+                const confirmed = confirm(
+                    `📋 準備匯入 ${newItems.length} 項檢測項目\n\n` +
+                    `⚠️ 這會替換現有的 ${CHECKLIST_ITEMS.length} 項清單\n\n` +
+                    `確定要繼續嗎？`
+                );
+                
+                if (!confirmed) return;
+                
+                // 更新到 IndexedDB
+                await dbSet('checklistItems', newItems);
+                CHECKLIST_ITEMS = newItems;
+                
+                alert(
+                    `✅ 成功匯入 ${newItems.length} 項檢測清單！\n\n` +
+                    `所有專案將使用新的清單。\n` +
+                    `現在重新整理頁面...`
+                );
+                
+                // 重新整理頁面
+                location.reload();
+                
+            } catch (err) {
+                alert(`❌ 匯入失敗：${err.message}`);
+            }
+        };
+        
+        reader.readAsText(file, 'UTF-8');
+    };
+    
+    input.click();
+}
+
+// 簡易 CSV 行解析（處理引號）
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    
+    result.push(current);
+    return result;
+}
+
+// ===== 新專案歡迎 Modal =====
+async function closeWelcome() {
+    document.getElementById('welcomeOverlay').classList.remove('show');
+    if (currentProjectId) {
+        await dbSet(`welcomed_${currentProjectId}`, true);
+    }
+}
+
+function welcomeDownload() {
+    exportChecklistCSV();
+    document.getElementById('welcomeDownloadHint').style.display = 'block';
+}
+
+function importChecklistCSVFromWelcome(input) {
+    closeWelcome();
+    if (input.files && input.files[0]) {
+        const fakeEvent = { target: input };
+        importChecklistCSV(fakeEvent);
+    }
+}
+
+
+</script>
+</body>
+</html>

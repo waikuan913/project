@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>專案管理</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDGgLC9tw0zjz0v6HsGmg7n-r0WM62UhTs",
+        authDomain: "system-test-4cb83.firebaseapp.com",
+        projectId: "system-test-4cb83",
+        storageBucket: "system-test-4cb83.firebasestorage.app",
+        messagingSenderId: "212237023118",
+        appId: "1:212237023118:web:28ba9d1535fe13aa9816df"
+    };
+    firebase.initializeApp(firebaseConfig);
+    </script>
+    <style>
+        :root { --primary-gradient: linear-gradient(135deg, #667eea, #764ba2); --bg: #f5f7fa; --btn-purple: #7c79d9; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft JhengHei', Arial, sans-serif; background: var(--bg); padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        /* 標頭 */
+        .header { background: var(--primary-gradient); color: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; position: relative; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header-desc { font-size: 14px; opacity: 0.9; }
+        .header-nav { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; }
+        .nav-btn { background: rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: bold; text-decoration: none; transition: all 0.25s; border: 1px solid rgba(255,255,255,0.3); }
+        .nav-btn:hover { background: white; color: #667eea; }
+
+        /* 控制列 */
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; transition: all 0.2s; }
+        .btn-primary { background: var(--btn-purple); color: white; }
+        .btn-secondary { background: white; border: 1px solid #ddd; color: #444; }
+        
+        .filter-tabs { margin-left: auto; display: flex; gap: 5px; }
+        .tab-btn { padding: 8px 16px; border: none; background: white; border-radius: 6px; cursor: pointer; font-size: 13px; color: #64748b; transition: all 0.2s; }
+        .tab-btn.active { background: var(--btn-purple); color: white; }
+
+        /* 搜尋列 */
+        .search-bar { background: white; padding: 12px 18px; border-radius: 10px; margin-bottom: 15px; display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .search-input { flex: 1; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
+        .search-input:focus { outline: none; border-color: var(--btn-purple); }
+
+        /* 表格容器 */
+        .table-container { background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+        
+        /* 表格 */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        
+        /* 表頭 */
+        thead { background: #1e3a5f; color: white; position: sticky; top: 0; z-index: 10; }
+        thead th { padding: 14px 12px; text-align: left; font-size: 13px; font-weight: bold; white-space: nowrap; border-right: 1px solid #2d5282; }
+        thead th:last-child { border-right: none; }
+        thead th.sortable { cursor: pointer; user-select: none; }
+        thead th.sortable:hover { background: #2d5282; }
+        .sort-icon { font-size: 10px; margin-left: 4px; opacity: 0.5; }
+
+        /* 表身 */
+        tbody tr { border-bottom: 1px solid #e2e8f0; transition: background 0.15s; cursor: pointer; }
+        tbody tr:hover { background: #f0f4ff; }
+        tbody tr.current { background: #ede9fe; border-left: 4px solid var(--btn-purple); }
+        tbody tr.archived { opacity: 0.6; }
+        tbody td { padding: 12px 12px; vertical-align: middle; }
+
+        /* 專案名稱欄 */
+        .project-name { font-weight: bold; color: #1e293b; margin-bottom: 3px; }
+        .project-id { font-size: 11px; color: #94a3b8; font-family: monospace; }
+
+        /* 狀態標籤 */
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; display: inline-block; }
+        .status-active { background: #d1fae5; color: #065f46; }
+        .status-completed { background: #dbeafe; color: #1e40af; }
+        .status-archived { background: #f3f4f6; color: #6b7280; }
+
+        /* 統計數字 */
+        .stats-cell { display: flex; gap: 12px; font-size: 12px; }
+        .stat { display: flex; align-items: center; gap: 3px; color: #64748b; }
+        .stat-num { font-weight: bold; color: #1e293b; }
+
+        /* 操作按鈕 */
+        .action-btns { display: flex; gap: 5px; }
+        .action-btn { padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: bold; cursor: pointer; border: 1px solid #e2e8f0; background: white; transition: all 0.2s; white-space: nowrap; }
+        .action-btn:hover { background: #f8fafc; transform: translateY(-1px); }
+        .action-btn.primary { background: var(--btn-purple); color: white; border-color: var(--btn-purple); }
+        .action-btn.danger { color: #dc2626; border-color: #fca5a5; }
+        .action-btn.danger:hover { background: #fef2f2; }
+
+        /* 目前專案標記 */
+        .current-marker { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--btn-purple); font-weight: bold; background: #ede9fe; padding: 3px 8px; border-radius: 10px; margin-left: 8px; }
+
+        /* 分頁 */
+
+
+        /* 空狀態 */
+        .empty-state { text-align: center; padding: 60px 20px; color: #94a3b8; }
+    
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-body { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-title { font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #1e293b; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 5px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--btn-purple); }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- 標頭 -->
+    <div class="header">
+        <h1>📁 專案管理</h1>
+        <div class="header-desc">管理所有檢測專案，切換專案或建立新專案</div>
+        <div class="header-nav">
+            <a href="檢測問題管理.html" class="nav-btn">📋 問題管理</a>
+            <a href="檢測項目管理.html" class="nav-btn">✅ 檢測清單</a>
+        </div>
+    </div>
+
+    <!-- 控制列 -->
+    <div class="controls">
+        <button class="btn btn-primary" onclick="openNewProjectModal()">➕ 建立新專案</button>
+        <button class="btn btn-secondary" onclick="exportAllProjects()">💾 匯出專案Json</button>
+                <button class="btn btn-secondary" onclick="exportProjectsCSV()">📊 匯出專案清單CSV</button>
+        
+        <div class="filter-tabs">
+            <button class="tab-btn active" data-filter="all" onclick="setFilter('all', this)">全部</button>
+            <button class="tab-btn" data-filter="active" onclick="setFilter('active', this)">進行中</button>
+            <button class="tab-btn" data-filter="completed" onclick="setFilter('completed', this)">已完成</button>
+            <button class="tab-btn" data-filter="archived" onclick="setFilter('archived', this)">已封存</button>
+        </div>
+    </div>
+
+    <!-- 搜尋列 -->
+    <div class="search-bar">
+        <input type="text" class="search-input" id="searchInput" placeholder="🔍 搜尋專案名稱、客戶、PM...">
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-container" id="tableContainer">
+        <table id="projectsTable">
+            <thead>
+                <tr>
+                    <th class="sortable" style="width: 12%;">客戶 <span class="sort-icon">▼</span></th>
+                    <th class="sortable" style="width: 20%;">專案名稱 <span class="sort-icon">▼</span></th>
+                    <th class="sortable" style="width: 9%;">PM</th>
+                    <th style="width: 10%;">工程師</th>
+                    <th class="sortable" style="width: 9%;">起始日期 <span class="sort-icon">▼</span></th>
+                    <th class="sortable" style="width: 9%;">結束日期 <span class="sort-icon">▼</span></th>
+                    <th style="width: 8%;">狀態</th>
+                    <th style="width: 13%;">進度統計</th>
+                    <th style="width: 18%;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 動態生成 -->
+            </tbody>
+        </table>
+
+        <!-- 分頁 -->
+    </div>
+
+</div>
+
+
+    <!-- 空狀態 -->
+    <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-state-icon">📁</div>
+        <div class="empty-state-text">尚未建立任何專案</div>
+        <button class="btn btn-primary" onclick="openNewProjectModal()">➕ 建立第一個專案</button>
+    </div>
+
+<!-- 新增/編輯專案 Modal -->
+<div class="modal" id="projectModal">
+    <div class="modal-body">
+        <div class="modal-title" id="modalTitle">➕ 建立新專案</div>
+        <form id="projectForm">
+            <div class="form-group">
+                <label>專案名稱 *</label>
+                <input type="text" id="projectName" required placeholder="例：國家圖書館數位典藏系統">
+            </div>
+            <div class="form-group">
+                <label>客戶名稱</label>
+                <input type="text" id="clientName" placeholder="例：國家圖書館">
+            </div>
+            <div class="form-group">
+                <label>PM</label>
+                <input type="text" id="pmName" placeholder="PM 姓名">
+            </div>
+            <div class="form-group">
+                <label>工程師</label>
+                <input type="text" id="engineers" placeholder="多人可用逗號分隔">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>起始日期 *</label>
+                    <input type="text" id="startDate" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" maxlength="10" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>結束日期 *</label>
+                    <input type="text" id="endDate" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" maxlength="10" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>專案狀態</label>
+                <select id="projectStatus">
+                    <option value="active">進行中</option>
+                    <option value="completed">已完成</option>
+                    <option value="archived">已封存</option>
+                </select>
+            </div>
+            <input type="hidden" id="editingProjectId">
+        </form>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn btn-primary" onclick="saveProject()">儲存</button>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+
+// ===== Firebase Firestore =====
+const firestoreDB = firebase.firestore();
+
+async function dbGet(key) {
+    try {
+        const docSnap = await firestoreDB.collection('appData').doc(key).get();
+        if (docSnap.exists()) return docSnap.data().value;
+        return undefined;
+    } catch(e) {
+        console.warn('dbGet error:', e);
+        return undefined;
+    }
+}
+
+async function dbSet(key, value) {
+    try {
+        await firestoreDB.collection('appData').doc(key).set({ value });
+    } catch(e) {
+        console.warn('dbSet error:', e);
+    }
+}
+
+// ===== 狀態 =====
+let projects = [];
+let currentProjectId = null;
+let currentFilter = 'all';
+
+// ===== 初始化 =====
+window.onload = async function() {
+    try {
+        projects = await dbGet('projects') || [];
+        currentProjectId = await dbGet('currentProject');
+        
+        // 如果沒有專案，建立預設專案
+        if (projects.length === 0) {
+            const defaultProj = createDefaultProject();
+            projects.push(defaultProj);
+            await dbSet('projects', projects);
+            currentProjectId = defaultProj.id;
+            await dbSet('currentProject', currentProjectId);
+        }
+        
+        renderProjects();
+        
+        // 搜尋功能
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const keyword = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#projectsTable tbody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(keyword) ? '' : 'none';
+            });
+        });
+    } catch(e) {
+        console.error('初始化失敗:', e);
+    }
+};
+
+function createDefaultProject() {
+    const today = new Date().toISOString().split('T')[0];
+    return {
+        id: 'PROJ-' + today.replace(/-/g, '') + '-001',
+        name: '預設專案',
+        client: '',
+        pm: '',
+        engineers: '',
+        startDate: '',
+        endDate: '',
+        createdAt: today,
+        status: 'active'
+    };
+}
+
+// ===== 渲染專案列表 =====
+function renderProjects() {
+    const tbody = document.querySelector('#projectsTable tbody');
+    const container = document.querySelector('.table-container');
+    const empty = document.getElementById('emptyState');
+    
+    let filtered = projects;
+    if (currentFilter !== 'all') {
+        filtered = projects.filter(p => p.status === currentFilter);
+    }
+    
+    if (filtered.length === 0) {
+        container.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+    }
+    
+    container.style.display = 'block';
+    empty.style.display = 'none';
+    
+    // 排序：目前專案在前，然後依建立日期
+    filtered.sort((a, b) => {
+        if (a.id === currentProjectId) return -1;
+        if (b.id === currentProjectId) return 1;
+        return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    
+    tbody.innerHTML = filtered.map(proj => {
+        const isActive = proj.id === currentProjectId;
+        const statusClass = `status-${proj.status}`;
+        const statusText = {
+            active: '進行中',
+            completed: '已完成',
+            archived: '已封存'
+        }[proj.status];
+        
+        // 取得該專案的統計
+        const stats = getProjectStats(proj.id);
+        
+        return `
+        <tr class="${isActive ? 'current' : ''} ${proj.status === 'archived' ? 'archived' : ''}" onclick="selectProject('${proj.id}')">
+            <td>${proj.client || '-'}</td>
+            <td>
+                <div class="project-name">
+                    ${proj.name || '未命名專案'}
+                    ${isActive ? '<span class="current-marker">✓ 目前專案</span>' : ''}
+                </div>
+                <div class="project-id">${proj.id}</div>
+            </td>
+            <td>${proj.pm || '-'}</td>
+            <td>${proj.engineers || '-'}</td>
+            <td>${proj.startDate || '-'}</td>
+            <td>${proj.endDate || '-'}</td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+            <td>
+                <div class="stats-cell">
+                    <span class="stat">✅ <span class="stat-num">${stats.passed}</span></span>
+                    <span class="stat">❌ <span class="stat-num">${stats.failed}</span></span>
+                    <span class="stat">⏳ <span class="stat-num">${stats.untested}</span></span>
+                </div>
+            </td>
+            <td>
+                <div class="action-btns">
+                    ${!isActive ? `<button class="action-btn primary" onclick="event.stopPropagation(); switchProject('${proj.id}')">切換</button>` : ''}
+                    <button class="action-btn" onclick="event.stopPropagation(); editProject('${proj.id}')">✏️ 編輯</button>
+                    ${proj.status !== 'archived' ? 
+                      `<button class="action-btn" onclick="event.stopPropagation(); archiveProject('${proj.id}')">📦 封存</button>` :
+                      `<button class="action-btn" onclick="event.stopPropagation(); unarchiveProject('${proj.id}')">📂 取消封存</button>`}
+                    <button class="action-btn danger" onclick="event.stopPropagation(); deleteProject('${proj.id}')">🗑️</button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// 取得專案統計
+function getProjectStats(projectId) {
+    // 這裡可以從 IndexedDB 讀取實際統計
+    // 暫時返回模擬資料
+    return {
+        passed: 0,
+        failed: 0,
+        untested: 198,
+        issues: 0
+    };
+}
+
+// ===== 專案操作 =====
+function openNewProjectModal() {
+    document.getElementById('modalTitle').textContent = '➕ 建立新專案';
+    document.getElementById('projectForm').reset();
+    document.getElementById('editingProjectId').value = '';
+    document.getElementById('projectStatus').value = 'active';
+    document.getElementById('projectModal').classList.add('show');
+}
+
+function editProject(id) {
+    const proj = projects.find(p => p.id === id);
+    if (!proj) return;
+    
+    document.getElementById('modalTitle').textContent = '✏️ 編輯專案';
+    document.getElementById('projectName').value = proj.name || '';
+    document.getElementById('clientName').value = proj.client || '';
+    document.getElementById('pmName').value = proj.pm || '';
+    document.getElementById('engineers').value = proj.engineers || '';
+    document.getElementById('startDate').value = proj.startDate || '';
+    document.getElementById('endDate').value = proj.endDate || '';
+    document.getElementById('projectStatus').value = proj.status || 'active';
+    document.getElementById('editingProjectId').value = id;
+    document.getElementById('projectModal').classList.add('show');
+}
+
+async function saveProject() {
+    const name = document.getElementById('projectName').value.trim();
+    if (!name) {
+        alert('請輸入專案名稱！');
+        return;
+    }
+
+    // 驗證日期格式（YYYY-MM-DD，西元年必須4位數）
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    const startVal = document.getElementById('startDate').value.trim();
+    const endVal = document.getElementById('endDate').value.trim();
+    if (startVal && !datePattern.test(startVal)) {
+        alert('開始日期格式錯誤，請輸入 YYYY-MM-DD（例：2026-01-01）');
+        return;
+    }
+    if (endVal && !datePattern.test(endVal)) {
+        alert('結束日期格式錯誤，請輸入 YYYY-MM-DD（例：2026-12-31）');
+        return;
+    }
+    if (startVal && parseInt(startVal.substring(0, 4)) < 1000) {
+        alert('年份請輸入西元年（4位數，例：2026）');
+        return;
+    }
+    
+    const editingId = document.getElementById('editingProjectId').value;
+    
+    if (editingId) {
+        // 編輯現有專案
+        const proj = projects.find(p => p.id === editingId);
+        if (proj) {
+            proj.name = name;
+            proj.client = document.getElementById('clientName').value.trim();
+            proj.pm = document.getElementById('pmName').value.trim();
+            proj.engineers = document.getElementById('engineers').value.trim();
+            proj.startDate = document.getElementById('startDate').value;
+            proj.endDate = document.getElementById('endDate').value;
+            proj.status = document.getElementById('projectStatus').value;
+        }
+    } else {
+        // 新增專案
+        const today = new Date().toISOString().split('T')[0];
+        const seq = String(projects.length + 1).padStart(3, '0');
+        const newProj = {
+            id: 'PROJ-' + today.replace(/-/g, '') + '-' + seq,
+            name: name,
+            client: document.getElementById('clientName').value.trim(),
+            pm: document.getElementById('pmName').value.trim(),
+            engineers: document.getElementById('engineers').value.trim(),
+            startDate: document.getElementById('startDate').value,
+            endDate: document.getElementById('endDate').value,
+            createdAt: today,
+            status: document.getElementById('projectStatus').value
+        };
+        projects.push(newProj);
+    }
+    
+    await dbSet('projects', projects);
+    closeModal();
+    renderProjects();
+}
+
+async function selectProject(id) {
+    // 點擊列區域，不做任何動作（由操作欄按鈕處理）
+}
+
+async function switchProject(id) {
+    if (!confirm('確定要切換到此專案嗎？')) return;
+
+    currentProjectId = id;
+    await dbSet('currentProject', id);
+    renderProjects();
+
+    const proj = projects.find(p => p.id === id);
+    const name = proj ? proj.name : id;
+    alert(`✅ 已切換到專案：${name}\n\n請點選上方「問題管理」或「檢測清單」按鈕開始作業。`);
+}
+
+async function archiveProject(id) {
+    if (!confirm('確定要封存此專案嗎？\n\n封存後仍可查看，但不會出現在進行中列表。')) return;
+    
+    const proj = projects.find(p => p.id === id);
+    if (proj) {
+        proj.status = 'archived';
+        await dbSet('projects', projects);
+        renderProjects();
+    }
+}
+
+async function unarchiveProject(id) {
+    const proj = projects.find(p => p.id === id);
+    if (proj) {
+        proj.status = 'active';
+        await dbSet('projects', projects);
+        renderProjects();
+    }
+}
+
+async function deleteProject(id) {
+    if (id === currentProjectId) {
+        alert('❌ 無法刪除目前使用中的專案！\n\n請先切換到其他專案。');
+        return;
+    }
+    
+    if (!confirm('⚠️ 確定要刪除此專案嗎？\n\n這會同時刪除：\n- 該專案的所有檢測記錄\n- 相關的問題資料\n\n此操作無法復原！')) return;
+    
+    // 刪除專案
+    projects = projects.filter(p => p.id !== id);
+    await dbSet('projects', projects);
+    
+    // 刪除該專案的檢測記錄
+    try {
+        await dbSet(`results_${id}`, null);
+    } catch(e) {}
+    
+    renderProjects();
+    alert('✅ 專案已刪除');
+}
+
+function closeModal() {
+    document.getElementById('projectModal').classList.remove('show');
+}
+
+function setFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderProjects();
+}
+
+// ===== 匯出 =====
+function exportAllProjects() {
+    const data = {
+        exportDate: new Date().toISOString().split('T')[0],
+        projects: projects
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `所有專案_${data.exportDate}.json`;
+    a.click();
+}
+
+function exportProjectsCSV() {
+    const exportDate = new Date().toISOString().split('T')[0];
+    const fileDate = exportDate.replace(/-/g, '');
+
+    let csv = "\uFEFF";
+    csv += `專案清單匯出,${exportDate}\n\n`;
+    csv += `專案編號,專案名稱,客戶名稱,PM,工程師,開始日期,結束日期,狀態\n`;
+
+    const statusMap = { active: '進行中', completed: '已完成', archived: '已封存' };
+
+    projects.forEach(p => {
+        const row = [
+            p.id || '',
+            `"${(p.name || '').replace(/"/g, '""')}"`,
+            `"${(p.client || '').replace(/"/g, '""')}"`,
+            `"${(p.pm || '').replace(/"/g, '""')}"`,
+            `"${(p.engineers || '').replace(/"/g, '""')}"`,
+            p.startDate || '',
+            p.endDate || '',
+            statusMap[p.status] || p.status || ''
+        ];
+        csv += row.join(',') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `專案清單_${fileDate}.csv`;
+    a.click();
+}
+
+</script>
+</body>
+</html>
