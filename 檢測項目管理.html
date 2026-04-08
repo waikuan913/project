@@ -521,7 +521,7 @@ const firestoreDB = firebase.firestore();
 async function dbGet(key) {
     try {
         const docSnap = await firestoreDB.collection('appData').doc(key).get();
-        if (docSnap.exists()) return docSnap.data().value;
+        if (docSnap.exists) return docSnap.data().value;
         return undefined;
     } catch(e) {
         console.warn('dbGet error:', e);
